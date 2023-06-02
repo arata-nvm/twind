@@ -12,8 +12,7 @@ fn main() {
         repl_loop();
     } else {
         let s = fs::read_to_string(&args[1]).expect("cannot read file");
-        let value = interpreter::interpret(&s);
-        println!("{value:?}")
+        interpret(&s);
     }
 }
 
@@ -27,7 +26,18 @@ fn repl_loop() {
             .read_line(&mut s)
             .expect("failed to stdin::read_line");
 
-        let value = interpreter::interpret(&s);
-        println!("{value:?}");
+        interpret(&s);
+    }
+}
+
+fn interpret(s: &str) {
+    match interpreter::interpret(s) {
+        Ok(value) => println!("{value:?}"),
+        Err(errors) => {
+            println!("There are {} errors:", errors.len());
+            for err in errors {
+                println!("{err}");
+            }
+        }
     }
 }

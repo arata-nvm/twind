@@ -1,18 +1,19 @@
-use self::evaluator::Value;
+use self::{error::InterpreterError, evaluator::Value};
 
+mod error;
 mod evaluator;
 mod lexer;
 mod parser;
 
-pub fn interpret(s: &str) -> Result<Value, Vec<String>> {
+pub fn interpret(s: &str) -> Result<Value, Vec<InterpreterError>> {
     let (tokens, errors) = lexer::tokenize(s);
     if !errors.is_empty() {
-        panic!("{errors:?}");
+        return Err(errors.into_iter().map(InterpreterError::from).collect());
     }
 
     let (program, errors) = parser::parse(tokens.unwrap());
     if !errors.is_empty() {
-        panic!("{errors:?}");
+        return Err(errors.into_iter().map(InterpreterError::from).collect());
     }
 
     let mut e = evaluator::Evaluator;
