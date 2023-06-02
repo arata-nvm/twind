@@ -2,6 +2,8 @@ use std::fmt;
 
 use chumsky::{prelude::*, primitive, recovery};
 
+use super::error::InterpreterError;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Token {
     Integer(String),
@@ -31,6 +33,8 @@ fn lexer() -> impl Parser<char, TokenVec, Error = Simple<char>> {
         .then_ignore(primitive::end())
 }
 
-pub fn tokenize(s: &str) -> (Option<TokenVec>, Vec<Simple<char>>) {
-    lexer().parse_recovery(s)
+pub fn tokenize(s: &str) -> (Option<TokenVec>, Vec<InterpreterError>) {
+    let (tokens, errors) = lexer().parse_recovery(s);
+    let errors = errors.into_iter().map(InterpreterError::from).collect();
+    (tokens, errors)
 }

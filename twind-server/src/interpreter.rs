@@ -7,18 +7,18 @@ mod parser;
 
 pub fn interpret(s: &str) -> Result<Value, Vec<InterpreterError>> {
     let (tokens, errors) = lexer::tokenize(s);
-    if !errors.is_empty() {
-        return Err(errors.into_iter().map(InterpreterError::from).collect());
-    }
+    let Some(tokens) = tokens else {
+      return Err(errors);
+    };
 
-    let (program, errors) = parser::parse(tokens.unwrap());
-    if !errors.is_empty() {
-        return Err(errors.into_iter().map(InterpreterError::from).collect());
-    }
+    let (program, errors) = parser::parse(tokens);
+    let Some(program) = program else {
+      return Err(errors);
+    };
 
     let mut e = evaluator::Evaluator;
     let mut last_value = Value::Void;
-    for (expr, _) in program.unwrap().0 {
+    for (expr, _) in program.0 {
         last_value = e.evaluate(&expr);
     }
 

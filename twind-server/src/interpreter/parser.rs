@@ -1,6 +1,9 @@
 use chumsky::{prelude::*, primitive, Stream};
 
-use super::lexer::{Spanned, Token, TokenVec};
+use super::{
+    error::InterpreterError,
+    lexer::{Spanned, Token, TokenVec},
+};
 
 pub type Program = Spanned<Vec<Spanned<Expression>>>;
 
@@ -34,8 +37,11 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
         .map_with_span(|expressions, span| (expressions, span))
 }
 
-pub fn parse(tokens: TokenVec) -> (Option<Program>, Vec<Simple<Token>>) {
+pub fn parse(tokens: TokenVec) -> (Option<Program>, Vec<InterpreterError>) {
     let len = tokens.last().map(|token| token.1.end).unwrap_or(0);
     let stream = Stream::from_iter(len..len + 1, tokens.into_iter());
-    parser().parse_recovery(stream)
+
+    let (program, errors) = parser().parse_recovery(stream);
+    let errors = errors.into_iter().map(InterpreterError::from).collect();
+    (program, errors)
 }
