@@ -1,13 +1,8 @@
-use thiserror::Error;
-
 use self::evaluator::Value;
 
 mod evaluator;
 mod lexer;
 mod parser;
-
-#[derive(Error, Debug)]
-pub enum InterpreterError {}
 
 pub fn interpret(s: &str) -> Result<Value, Vec<String>> {
     let (tokens, errors) = lexer::tokenize(s);
