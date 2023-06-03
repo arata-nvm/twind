@@ -232,10 +232,10 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
             .map(|((name, expr_to_bind), expr)| Expression::r#let(name, expr_to_bind, expr));
 
         let function = just(Token::Keyword(Keyword::Fun))
-            .ignore_then(identifier)
+            .ignore_then(identifier.repeated())
             .then_ignore(just(Token::Keyword(Keyword::Arrow)))
             .then(expression)
-            .map(|(param_name, expr)| Expression::function(param_name, expr));
+            .foldr(Expression::function);
 
         r#if.or(r#let).or(function).or(compare)
     });
