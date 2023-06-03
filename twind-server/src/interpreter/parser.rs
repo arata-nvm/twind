@@ -160,8 +160,8 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
 
         let apply = atom
             .clone()
-            .then(atom.clone())
-            .map(|(func, arg)| Expression::apply(func, arg))
+            .then(atom.clone().repeated())
+            .foldl(Expression::apply)
             .or(atom)
             .labelled("apply");
 
