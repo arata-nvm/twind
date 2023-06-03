@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use super::{
     error::InterpreterError,
-    parser::{Binary, BinaryOperator, Boolean, Expression, Identifier, If, Integer, Let},
+    parser::{
+        Binary, BinaryOperator, Boolean, Expression, Identifier, If, Integer, LetExpression,
+        LetStatement, Statement,
+    },
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -40,7 +43,21 @@ pub struct Evaluator {
 }
 
 impl Evaluator {
-    pub fn evaluate(&mut self, expr: Expression) -> Result<Value, InterpreterError> {
+    pub fn evaluate(&mut self, stmt: Statement) -> Result<Value, InterpreterError> {
+        match stmt {
+            Statement::Let(r#let) => {
+                let LetStatement { name, expr_to_bind } = r#let;
+
+                let expr_to_bind = self.evaluate_expr(expr_to_bind)?;
+                self.environment.insert(name, expr_to_bind);
+
+                Ok(Value::Void)
+            }
+            Statement::Expression(expr) => self.evaluate_expr(expr),
+        }
+    }
+
+    fn evaluate_expr(&mut self, expr: Expression) -> Result<Value, InterpreterError> {
         match expr {
             Expression::Identifier(identifier) => {
                 let Identifier { name } = *identifier;
@@ -59,8 +76,8 @@ impl Evaluator {
             }
             Expression::Binary(binary) => {
                 let Binary { operator, lhs, rhs } = *binary;
-                let lhs = self.evaluate(lhs)?.to_integer()?;
-                let rhs = self.evaluate(rhs)?.to_integer()?;
+                let lhs = self.evaluate_expr(lhs)?.to_integer()?;
+                let rhs = self.evaluate_expr(rhs)?.to_integer()?;
 
                 match operator {
                     BinaryOperator::Add => Ok(Value::Integer(lhs + rhs)),
@@ -77,24 +94,24 @@ impl Evaluator {
                     val_else,
                 } = *r#if;
 
-                let condition = self.evaluate(condition)?.to_boolean()?;
+                let condition = self.evaluate_expr(condition)?.to_boolean()?;
                 if condition {
-                    self.evaluate(val_then)
+                    self.evaluate_expr(val_then)
                 } else {
-                    self.evaluate(val_else)
+                    self.evaluate_expr(val_else)
                 }
             }
             Expression::Let(r#let) => {
-                let Let {
+                let LetExpression {
                     name,
                     expr_to_bind,
                     expr,
                 } = *r#let;
 
-                let expr_to_bind = self.evaluate(expr_to_bind)?;
+                let expr_to_bind = self.evaluate_expr(expr_to_bind)?;
                 self.environment.insert(name, expr_to_bind);
 
-                self.evaluate(expr)
+                self.evaluate_expr(expr)
             }
         }
     }

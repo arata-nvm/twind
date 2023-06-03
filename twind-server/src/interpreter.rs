@@ -1,11 +1,11 @@
 use self::{error::InterpreterError, evaluator::Value};
 
-mod error;
-mod evaluator;
-mod lexer;
-mod parser;
+pub mod error;
+pub mod evaluator;
+pub mod lexer;
+pub mod parser;
 
-pub fn interpret(s: &str) -> Result<Value, Vec<InterpreterError>> {
+pub fn interpret(s: &str, e: &mut evaluator::Evaluator) -> Result<Value, Vec<InterpreterError>> {
     let (tokens, errors) = lexer::tokenize(s);
     let Some(tokens) = tokens else {
       return Err(errors);
@@ -16,10 +16,9 @@ pub fn interpret(s: &str) -> Result<Value, Vec<InterpreterError>> {
       return Err(errors);
     };
 
-    let mut e = evaluator::Evaluator::default();
     let mut last_value = Value::Void;
-    for (expr, _) in program.0 {
-        last_value = e.evaluate(expr).map_err(|err| vec![err])?;
+    for (stmt, _) in program.0 {
+        last_value = e.evaluate(stmt).map_err(|err| vec![err])?;
     }
 
     Ok(last_value)

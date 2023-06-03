@@ -5,7 +5,29 @@ use super::{
     lexer::{Keyword, Operator, Spanned, Token, TokenVec},
 };
 
-pub type Program = Spanned<Vec<Spanned<Expression>>>;
+pub type Program = Spanned<Vec<Spanned<Statement>>>;
+
+#[derive(Debug, Clone)]
+pub enum Statement {
+    Let(LetStatement),
+    Expression(Expression),
+}
+
+impl Statement {
+    pub fn r#let(name: String, expr_to_bind: Expression) -> Self {
+        Self::Let(LetStatement { name, expr_to_bind })
+    }
+
+    pub fn expression(expr: Expression) -> Self {
+        Self::Expression(expr)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LetStatement {
+    pub name: String,
+    pub expr_to_bind: Expression,
+}
 
 #[derive(Debug, Clone)]
 pub enum Expression {
@@ -14,7 +36,7 @@ pub enum Expression {
     Integer(Box<Integer>),
     Binary(Box<Binary>),
     If(Box<If>),
-    Let(Box<Let>),
+    Let(Box<LetExpression>),
 }
 
 impl Expression {
@@ -42,7 +64,7 @@ impl Expression {
     }
 
     pub fn r#let(name: String, expr_to_bind: Expression, expr: Expression) -> Self {
-        Self::Let(Box::new(Let {
+        Self::Let(Box::new(LetExpression {
             name,
             expr_to_bind,
             expr,
@@ -89,13 +111,15 @@ pub struct If {
 }
 
 #[derive(Debug, Clone)]
-pub struct Let {
+pub struct LetExpression {
     pub name: String,
     pub expr_to_bind: Expression,
     pub expr: Expression,
 }
 
 fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
+    let identifier = select! { Token::Identifier(s) => s };
+
     let expression = recursive(|expression| {
         let value = select! {
               Token::Keyword(Keyword::True) => Expression::boolean(true),
@@ -146,7 +170,6 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
             })
             .labelled("if");
 
-        let identifier = select! { Token::Identifier(s) => s };
         let r#let = just(Token::Keyword(Keyword::Let))
             .ignore_then(identifier)
             .then_ignore(just(Token::Operator(Operator::Eq)))
@@ -158,7 +181,16 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
         r#if.or(r#let).or(compare)
     });
 
-    expression
+    let r#let = just(Token::Keyword(Keyword::Let))
+        .ignore_then(identifier)
+        .then_ignore(just(Token::Operator(Operator::Eq)))
+        .then(expression.clone())
+        .then_ignore(just(Token::Keyword(Keyword::EndLet)))
+        .map(|(name, expr_to_bind)| Statement::r#let(name, expr_to_bind));
+
+    let statement = r#let.or(expression.map(Statement::expression));
+
+    statement
         .map_with_span(|expr, span| (expr, span))
         .repeated()
         .then_ignore(end())

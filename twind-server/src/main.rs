@@ -3,6 +3,8 @@ use std::{
     io::{stdin, stdout, Write},
 };
 
+use interpreter::evaluator;
+
 mod interpreter;
 
 fn main() {
@@ -12,11 +14,14 @@ fn main() {
         repl_loop();
     } else {
         let s = fs::read_to_string(&args[1]).expect("cannot read file");
-        interpret(&s);
+        let mut e = evaluator::Evaluator::default();
+        interpret(&s, &mut e);
     }
 }
 
 fn repl_loop() {
+    let mut e = evaluator::Evaluator::default();
+
     loop {
         print!("> ");
         stdout().flush().expect("failed to stdout::flush");
@@ -26,12 +31,12 @@ fn repl_loop() {
             .read_line(&mut s)
             .expect("failed to stdin::read_line");
 
-        interpret(&s);
+        interpret(&s, &mut e);
     }
 }
 
-fn interpret(s: &str) {
-    match interpreter::interpret(s) {
+fn interpret(s: &str, e: &mut evaluator::Evaluator) {
+    match interpreter::interpret(s, e) {
         Ok(value) => println!("{value:?}"),
         Err(errors) => {
             println!("There are {} errors:", errors.len());
