@@ -9,12 +9,17 @@ pub type Program = Spanned<Vec<Spanned<Expression>>>;
 
 #[derive(Debug, Clone)]
 pub enum Expression {
+    Boolean(Box<Boolean>),
     Integer(Box<Integer>),
     Binary(Box<Binary>),
     If(Box<If>),
 }
 
 impl Expression {
+    pub fn boolean(value: bool) -> Self {
+        Self::Boolean(Box::new(Boolean { value }))
+    }
+
     pub fn integer(value: i64) -> Self {
         Self::Integer(Box::new(Integer { value }))
     }
@@ -30,6 +35,11 @@ impl Expression {
             val_else,
         }))
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct Boolean {
+    pub value: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -62,12 +72,14 @@ pub struct If {
 
 fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
     let expression = recursive(|expression| {
-        let integer = select! {
+        let value = select! {
+              Token::Keyword(Keyword::True) => Expression::boolean(true),
+              Token::Keyword(Keyword::False) => Expression::boolean(false),
               Token::Integer(s) => Expression::integer(s.parse().unwrap()),
         }
-        .labelled("integer");
+        .labelled("value");
 
-        let atom = integer.or(expression.clone().delimited_by(
+        let atom = value.or(expression.clone().delimited_by(
             just(Token::Operator(Operator::ParenOpen)),
             just(Token::Operator(Operator::ParenClose)),
         ));

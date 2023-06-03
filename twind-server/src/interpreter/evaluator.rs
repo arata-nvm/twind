@@ -1,6 +1,6 @@
 use super::{
     error::InterpreterError,
-    parser::{Binary, BinaryOperator, Expression, If, Integer},
+    parser::{Binary, BinaryOperator, Boolean, Expression, If, Integer},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -38,6 +38,10 @@ pub struct Evaluator;
 impl Evaluator {
     pub fn evaluate(&mut self, expr: Expression) -> Result<Value, InterpreterError> {
         match expr {
+            Expression::Boolean(boolean) => {
+                let Boolean { value } = *boolean;
+                Ok(Value::Boolean(value))
+            }
             Expression::Integer(integer) => {
                 let Integer { value } = *integer;
                 Ok(Value::Integer(value))

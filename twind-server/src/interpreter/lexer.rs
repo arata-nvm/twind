@@ -27,6 +27,8 @@ pub enum Keyword {
     If,
     Then,
     Else,
+    True,
+    False,
 }
 
 impl fmt::Display for Token {
@@ -59,7 +61,9 @@ fn lexer() -> impl Parser<char, TokenVec, Error = Simple<char>> {
     let keyword = keyword("if")
         .to(Token::Keyword(Keyword::If))
         .or(keyword("then").to(Token::Keyword(Keyword::Then)))
-        .or(keyword("else").to(Token::Keyword(Keyword::Else)));
+        .or(keyword("else").to(Token::Keyword(Keyword::Else)))
+        .or(keyword("true").to(Token::Keyword(Keyword::True)))
+        .or(keyword("false").to(Token::Keyword(Keyword::False)));
 
     let token = integer.or(operator).or(keyword);
 
