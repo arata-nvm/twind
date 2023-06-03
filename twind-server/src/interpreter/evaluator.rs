@@ -3,16 +3,17 @@ use std::collections::HashMap;
 use super::{
     error::InterpreterError,
     parser::{
-        Binary, BinaryOperator, Boolean, Expression, Identifier, If, Integer, LetExpression,
-        LetStatement, Statement,
+        Binary, BinaryOperator, Boolean, Expression, Function, Identifier, If, Integer,
+        LetExpression, LetStatement, Statement,
     },
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Value {
     Void,
     Boolean(bool),
     Integer(i64),
+    Function(String, Expression),
 }
 
 impl Value {
@@ -62,7 +63,7 @@ impl Evaluator {
             Expression::Identifier(identifier) => {
                 let Identifier { name } = *identifier;
                 match self.environment.get(&name) {
-                    Some(value) => Ok(*value),
+                    Some(value) => Ok(value.clone()),
                     None => Err(InterpreterError::CannotFindVariable { name }),
                 }
             }
@@ -112,6 +113,10 @@ impl Evaluator {
                 self.environment.insert(name, expr_to_bind);
 
                 self.evaluate_expr(expr)
+            }
+            Expression::Function(function) => {
+                let Function { param_name, expr } = *function;
+                Ok(Value::Function(param_name, expr))
             }
         }
     }

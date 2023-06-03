@@ -37,6 +37,7 @@ pub enum Expression {
     Binary(Box<Binary>),
     If(Box<If>),
     Let(Box<LetExpression>),
+    Function(Box<Function>),
 }
 
 impl Expression {
@@ -69,6 +70,10 @@ impl Expression {
             expr_to_bind,
             expr,
         }))
+    }
+
+    pub fn function(param_name: String, expr: Expression) -> Self {
+        Self::Function(Box::new(Function { param_name, expr }))
     }
 }
 
@@ -114,6 +119,12 @@ pub struct If {
 pub struct LetExpression {
     pub name: String,
     pub expr_to_bind: Expression,
+    pub expr: Expression,
+}
+
+#[derive(Debug, Clone)]
+pub struct Function {
+    pub param_name: String,
     pub expr: Expression,
 }
 
@@ -175,10 +186,16 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
             .then_ignore(just(Token::Operator(Operator::Eq)))
             .then(expression.clone())
             .then_ignore(just(Token::Keyword(Keyword::In)))
-            .then(expression)
+            .then(expression.clone())
             .map(|((name, expr_to_bind), expr)| Expression::r#let(name, expr_to_bind, expr));
 
-        r#if.or(r#let).or(compare)
+        let function = just(Token::Keyword(Keyword::Fun))
+            .ignore_then(identifier)
+            .then_ignore(just(Token::Keyword(Keyword::Arrow)))
+            .then(expression)
+            .map(|(param_name, expr)| Expression::function(param_name, expr));
+
+        r#if.or(r#let).or(function).or(compare)
     });
 
     let r#let = just(Token::Keyword(Keyword::Let))
