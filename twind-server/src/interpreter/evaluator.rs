@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use super::{
     error::InterpreterError,
     parser::{
@@ -8,12 +6,14 @@ use super::{
     },
 };
 
+pub type Environment = Vec<(String, Value)>;
+
 #[derive(Debug, Clone)]
 pub enum Value {
     Void,
     Boolean(bool),
     Integer(i64),
-    Function(String, Expression),
+    Function(String, Expression, Environment),
 }
 
 impl Value {
@@ -37,9 +37,9 @@ impl Value {
         }
     }
 
-    pub fn to_function(self) -> Result<(String, Expression), InterpreterError> {
+    pub fn to_function(self) -> Result<(String, Expression, Environment), InterpreterError> {
         match self {
-            Value::Function(param_name, expr) => Ok((param_name, expr)),
+            Value::Function(param_name, expr, env) => Ok((param_name, expr, env)),
             _ => Err(InterpreterError::UnexpectedValue {
                 expect: "function".to_string(),
                 found: format!("{self:?}"),
@@ -120,24 +120,29 @@ impl Evaluator {
                     expr,
                 } = *r#let;
 
+                self.push_context();
                 let expr_to_bind = self.evaluate_expr(expr_to_bind)?;
                 self.add_variable(name, expr_to_bind);
+                let ret_val = self.evaluate_expr(expr);
+                self.pop_context();
 
-                self.evaluate_expr(expr)
+                ret_val
             }
             Expression::Function(function) => {
                 let Function { param_name, expr } = *function;
-                Ok(Value::Function(param_name, expr))
+                Ok(Value::Function(param_name, expr, self.environment.clone()))
             }
             Expression::Apply(apply) => {
                 let Apply { func, arg } = *apply;
-                let (param_name, expr) = self.evaluate_expr(func)?.to_function()?;
+                let (param_name, expr, newenv) = self.evaluate_expr(func)?.to_function()?;
 
-                self.push_context();
+                let oldenv = std::mem::replace(&mut self.environment, newenv);
+
                 let arg = self.evaluate_expr(arg)?;
                 self.add_variable(param_name, arg);
                 let ret_val = self.evaluate_expr(expr);
-                self.pop_context();
+
+                let _ = std::mem::replace(&mut self.environment, oldenv);
 
                 ret_val
             }
@@ -162,6 +167,6 @@ impl Evaluator {
 
     fn pop_context(&mut self) {
         let scope = self.scopes.pop().unwrap();
-        self.environment.shrink_to(scope);
+        self.environment.truncate(scope);
     }
 }
