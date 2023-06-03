@@ -46,46 +46,56 @@ pub enum BinaryOperator {
 }
 
 fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
-    let integer = select! {
-          Token::Integer(s) => Expression::integer(s.parse().unwrap()),
-    }
-    .labelled("integer");
+    let expression = recursive(|expression| {
+        let integer = select! {
+              Token::Integer(s) => Expression::integer(s.parse().unwrap()),
+        }
+        .labelled("integer");
 
-    let mul_div = integer
-        .then(
-            just(Token::Operator("*".to_string()))
-                .to(BinaryOperator::Mul)
-                .or(just(Token::Operator("/".to_string())).to(BinaryOperator::Div))
-                .then(integer)
-                .repeated(),
-        )
-        .foldl(|lhs, (op, rhs)| Expression::binary(op, lhs, rhs))
-        .labelled("mul_div");
+        let atom = integer.or(expression.delimited_by(
+            just(Token::Operator("(".to_string())),
+            just(Token::Operator(")".to_string())),
+        ));
 
-    let add_sub = mul_div
-        .clone()
-        .then(
-            just(Token::Operator("+".to_string()))
-                .to(BinaryOperator::Add)
-                .or(just(Token::Operator("-".to_string())).to(BinaryOperator::Sub))
-                .then(mul_div)
-                .repeated(),
-        )
-        .foldl(|lhs, (op, rhs)| Expression::binary(op, lhs, rhs))
-        .labelled("add_sub");
+        let mul_div = atom
+            .clone()
+            .then(
+                just(Token::Operator("*".to_string()))
+                    .to(BinaryOperator::Mul)
+                    .or(just(Token::Operator("/".to_string())).to(BinaryOperator::Div))
+                    .then(atom)
+                    .repeated(),
+            )
+            .foldl(|lhs, (op, rhs)| Expression::binary(op, lhs, rhs))
+            .labelled("mul_div");
 
-    let compare = add_sub
-        .clone()
-        .then(
-            just(Token::Operator("<".to_string()))
-                .to(BinaryOperator::Lt)
-                .then(add_sub)
-                .repeated(),
-        )
-        .foldl(|lhs, (op, rhs)| Expression::binary(op, lhs, rhs))
-        .labelled("compare");
+        let add_sub = mul_div
+            .clone()
+            .then(
+                just(Token::Operator("+".to_string()))
+                    .to(BinaryOperator::Add)
+                    .or(just(Token::Operator("-".to_string())).to(BinaryOperator::Sub))
+                    .then(mul_div)
+                    .repeated(),
+            )
+            .foldl(|lhs, (op, rhs)| Expression::binary(op, lhs, rhs))
+            .labelled("add_sub");
 
-    compare
+        let compare = add_sub
+            .clone()
+            .then(
+                just(Token::Operator("<".to_string()))
+                    .to(BinaryOperator::Lt)
+                    .then(add_sub)
+                    .repeated(),
+            )
+            .foldl(|lhs, (op, rhs)| Expression::binary(op, lhs, rhs))
+            .labelled("compare");
+
+        compare
+    });
+
+    expression
         .map_with_span(|expr, span| (expr, span))
         .repeated()
         .then_ignore(primitive::end())
