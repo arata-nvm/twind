@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use super::{
     error::InterpreterError,
     parser::{
-        Binary, BinaryOperator, Boolean, Expression, Function, Identifier, If, Integer,
+        Apply, Binary, BinaryOperator, Boolean, Expression, Function, Identifier, If, Integer,
         LetExpression, LetStatement, Statement,
     },
 };
@@ -36,11 +36,22 @@ impl Value {
             }),
         }
     }
+
+    pub fn to_function(self) -> Result<(String, Expression), InterpreterError> {
+        match self {
+            Value::Function(param_name, expr) => Ok((param_name, expr)),
+            _ => Err(InterpreterError::UnexpectedValue {
+                expect: "function".to_string(),
+                found: format!("{self:?}"),
+            }),
+        }
+    }
 }
 
 #[derive(Debug, Default)]
 pub struct Evaluator {
-    environment: HashMap<String, Value>,
+    environment: Vec<(String, Value)>,
+    scopes: Vec<usize>,
 }
 
 impl Evaluator {
@@ -50,7 +61,7 @@ impl Evaluator {
                 let LetStatement { name, expr_to_bind } = r#let;
 
                 let expr_to_bind = self.evaluate_expr(expr_to_bind)?;
-                self.environment.insert(name, expr_to_bind);
+                self.add_variable(name, expr_to_bind);
 
                 Ok(Value::Void)
             }
@@ -62,7 +73,7 @@ impl Evaluator {
         match expr {
             Expression::Identifier(identifier) => {
                 let Identifier { name } = *identifier;
-                match self.environment.get(&name) {
+                match self.find_variable(&name) {
                     Some(value) => Ok(value.clone()),
                     None => Err(InterpreterError::CannotFindVariable { name }),
                 }
@@ -110,7 +121,7 @@ impl Evaluator {
                 } = *r#let;
 
                 let expr_to_bind = self.evaluate_expr(expr_to_bind)?;
-                self.environment.insert(name, expr_to_bind);
+                self.add_variable(name, expr_to_bind);
 
                 self.evaluate_expr(expr)
             }
@@ -118,6 +129,39 @@ impl Evaluator {
                 let Function { param_name, expr } = *function;
                 Ok(Value::Function(param_name, expr))
             }
+            Expression::Apply(apply) => {
+                let Apply { func, arg } = *apply;
+                let (param_name, expr) = self.evaluate_expr(func)?.to_function()?;
+
+                self.push_context();
+                let arg = self.evaluate_expr(arg)?;
+                self.add_variable(param_name, arg);
+                let ret_val = self.evaluate_expr(expr);
+                self.pop_context();
+
+                ret_val
+            }
         }
+    }
+
+    fn add_variable(&mut self, name: String, value: Value) {
+        self.environment.push((name, value));
+    }
+
+    fn find_variable(&self, name: &String) -> Option<Value> {
+        self.environment
+            .iter()
+            .rev()
+            .find(|(var_name, _)| var_name == name)
+            .map(|(_, value)| value.clone())
+    }
+
+    fn push_context(&mut self) {
+        self.scopes.push(self.environment.len());
+    }
+
+    fn pop_context(&mut self) {
+        let scope = self.scopes.pop().unwrap();
+        self.environment.shrink_to(scope);
     }
 }

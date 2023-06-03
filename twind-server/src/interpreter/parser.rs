@@ -38,6 +38,7 @@ pub enum Expression {
     If(Box<If>),
     Let(Box<LetExpression>),
     Function(Box<Function>),
+    Apply(Box<Apply>),
 }
 
 impl Expression {
@@ -74,6 +75,10 @@ impl Expression {
 
     pub fn function(param_name: String, expr: Expression) -> Self {
         Self::Function(Box::new(Function { param_name, expr }))
+    }
+
+    pub fn apply(func: Expression, arg: Expression) -> Self {
+        Self::Apply(Box::new(Apply { func, arg }))
     }
 }
 
@@ -128,6 +133,12 @@ pub struct Function {
     pub expr: Expression,
 }
 
+#[derive(Debug, Clone)]
+pub struct Apply {
+    pub func: Expression,
+    pub arg: Expression,
+}
+
 fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
     let identifier = select! { Token::Identifier(s) => s };
 
@@ -140,17 +151,26 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
         }
         .labelled("value");
 
-        let atom = value.or(expression.clone().delimited_by(
-            just(Token::Operator(Operator::ParenOpen)),
-            just(Token::Operator(Operator::ParenClose)),
-        ));
+        let atom = value
+            .or(expression.clone().delimited_by(
+                just(Token::Operator(Operator::ParenOpen)),
+                just(Token::Operator(Operator::ParenClose)),
+            ))
+            .labelled("atom");
+
+        let apply = atom
+            .clone()
+            .then(atom.clone())
+            .map(|(func, arg)| Expression::apply(func, arg))
+            .or(atom)
+            .labelled("apply");
 
         let op = just(Token::Operator(Operator::Mul))
             .to(BinaryOperator::Mul)
             .or(just(Token::Operator(Operator::Div)).to(BinaryOperator::Div));
-        let mul_div = atom
+        let mul_div = apply
             .clone()
-            .then(op.then(atom).repeated())
+            .then(op.then(apply).repeated())
             .foldl(|lhs, (op, rhs)| Expression::binary(op, lhs, rhs))
             .labelled("mul_div");
 
