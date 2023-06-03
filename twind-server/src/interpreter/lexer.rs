@@ -7,14 +7,25 @@ use super::error::InterpreterError;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Token {
     Integer(String),
-    Operator(String),
+    Operator(Operator),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Operator {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    ParenOpen,
+    ParenClose,
+    Lt,
 }
 
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Token::Integer(s) => write!(f, "{s}"),
-            Token::Operator(s) => write!(f, "{s}"),
+            Token::Operator(s) => write!(f, "{s:?}"),
         }
     }
 }
@@ -26,7 +37,15 @@ pub type TokenVec = Vec<Spanned<Token>>;
 fn lexer() -> impl Parser<char, TokenVec, Error = Simple<char>> {
     let integer = text::digits(10).map(Token::Integer);
 
-    let operator = one_of("+-*/<()").map(|c: char| Token::Operator(c.to_string()));
+    let operator = select! {
+      '+' => Token::Operator(Operator::Add),
+      '-' => Token::Operator(Operator::Sub),
+      '*' => Token::Operator(Operator::Mul),
+      '/' => Token::Operator(Operator::Div),
+      '(' => Token::Operator(Operator::ParenOpen),
+      ')' => Token::Operator(Operator::ParenClose),
+      '<' => Token::Operator(Operator::Lt),
+    };
 
     let token = integer.or(operator);
 

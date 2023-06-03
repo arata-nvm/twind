@@ -2,7 +2,7 @@ use chumsky::{prelude::*, primitive, Stream};
 
 use super::{
     error::InterpreterError,
-    lexer::{Spanned, Token, TokenVec},
+    lexer::{Operator, Spanned, Token, TokenVec},
 };
 
 pub type Program = Spanned<Vec<Spanned<Expression>>>;
@@ -53,16 +53,16 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
         .labelled("integer");
 
         let atom = integer.or(expression.delimited_by(
-            just(Token::Operator("(".to_string())),
-            just(Token::Operator(")".to_string())),
+            just(Token::Operator(Operator::ParenOpen)),
+            just(Token::Operator(Operator::ParenClose)),
         ));
 
         let mul_div = atom
             .clone()
             .then(
-                just(Token::Operator("*".to_string()))
+                just(Token::Operator(Operator::Mul))
                     .to(BinaryOperator::Mul)
-                    .or(just(Token::Operator("/".to_string())).to(BinaryOperator::Div))
+                    .or(just(Token::Operator(Operator::Div)).to(BinaryOperator::Div))
                     .then(atom)
                     .repeated(),
             )
@@ -72,9 +72,9 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
         let add_sub = mul_div
             .clone()
             .then(
-                just(Token::Operator("+".to_string()))
+                just(Token::Operator(Operator::Add))
                     .to(BinaryOperator::Add)
-                    .or(just(Token::Operator("-".to_string())).to(BinaryOperator::Sub))
+                    .or(just(Token::Operator(Operator::Sub)).to(BinaryOperator::Sub))
                     .then(mul_div)
                     .repeated(),
             )
@@ -84,7 +84,7 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
         let compare = add_sub
             .clone()
             .then(
-                just(Token::Operator("<".to_string()))
+                just(Token::Operator(Operator::Lt))
                     .to(BinaryOperator::Lt)
                     .then(add_sub)
                     .repeated(),
