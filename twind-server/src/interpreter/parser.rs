@@ -9,13 +9,18 @@ pub type Program = Spanned<Vec<Spanned<Expression>>>;
 
 #[derive(Debug, Clone)]
 pub enum Expression {
+    Identifier(Box<Identifier>),
     Boolean(Box<Boolean>),
     Integer(Box<Integer>),
     Binary(Box<Binary>),
     If(Box<If>),
+    Let(Box<Let>),
 }
 
 impl Expression {
+    pub fn identifier(name: String) -> Self {
+        Self::Identifier(Box::new(Identifier { name }))
+    }
     pub fn boolean(value: bool) -> Self {
         Self::Boolean(Box::new(Boolean { value }))
     }
@@ -35,6 +40,19 @@ impl Expression {
             val_else,
         }))
     }
+
+    pub fn r#let(name: String, expr_to_bind: Expression, expr: Expression) -> Self {
+        Self::Let(Box::new(Let {
+            name,
+            expr_to_bind,
+            expr,
+        }))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Identifier {
+    pub name: String,
 }
 
 #[derive(Debug, Clone)]
@@ -70,12 +88,20 @@ pub struct If {
     pub val_else: Expression,
 }
 
+#[derive(Debug, Clone)]
+pub struct Let {
+    pub name: String,
+    pub expr_to_bind: Expression,
+    pub expr: Expression,
+}
+
 fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
     let expression = recursive(|expression| {
         let value = select! {
               Token::Keyword(Keyword::True) => Expression::boolean(true),
               Token::Keyword(Keyword::False) => Expression::boolean(false),
               Token::Integer(s) => Expression::integer(s.parse().unwrap()),
+              Token::Identifier(s) => Expression::identifier(s),
         }
         .labelled("value");
 
@@ -114,13 +140,22 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
             .then_ignore(just(Token::Keyword(Keyword::Then)))
             .then(expression.clone())
             .then_ignore(just(Token::Keyword(Keyword::Else)))
-            .then(expression)
+            .then(expression.clone())
             .map(|((condition, val_then), val_else)| {
                 Expression::r#if(condition, val_then, val_else)
             })
             .labelled("if");
 
-        r#if.or(compare)
+        let identifier = select! { Token::Identifier(s) => s };
+        let r#let = just(Token::Keyword(Keyword::Let))
+            .ignore_then(identifier)
+            .then_ignore(just(Token::Operator(Operator::Eq)))
+            .then(expression.clone())
+            .then_ignore(just(Token::Keyword(Keyword::In)))
+            .then(expression)
+            .map(|((name, expr_to_bind), expr)| Expression::r#let(name, expr_to_bind, expr));
+
+        r#if.or(r#let).or(compare)
     });
 
     expression

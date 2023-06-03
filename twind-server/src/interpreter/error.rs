@@ -13,6 +13,9 @@ pub enum InterpreterError {
 
     #[error("{expect} expected, but {found} found ")]
     UnexpectedValue { expect: String, found: String },
+
+    #[error("cannot find variable `{name}`")]
+    CannotFindVariable { name: String },
 }
 
 impl From<Simple<char>> for InterpreterError {

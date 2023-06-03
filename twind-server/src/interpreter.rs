@@ -16,7 +16,7 @@ pub fn interpret(s: &str) -> Result<Value, Vec<InterpreterError>> {
       return Err(errors);
     };
 
-    let mut e = evaluator::Evaluator;
+    let mut e = evaluator::Evaluator::default();
     let mut last_value = Value::Void;
     for (expr, _) in program.0 {
         last_value = e.evaluate(expr).map_err(|err| vec![err])?;

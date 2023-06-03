@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use super::{
     error::InterpreterError,
-    parser::{Binary, BinaryOperator, Boolean, Expression, If, Integer},
+    parser::{Binary, BinaryOperator, Boolean, Expression, Identifier, If, Integer, Let},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -33,11 +35,20 @@ impl Value {
 }
 
 #[derive(Debug, Default)]
-pub struct Evaluator;
+pub struct Evaluator {
+    environment: HashMap<String, Value>,
+}
 
 impl Evaluator {
     pub fn evaluate(&mut self, expr: Expression) -> Result<Value, InterpreterError> {
         match expr {
+            Expression::Identifier(identifier) => {
+                let Identifier { name } = *identifier;
+                match self.environment.get(&name) {
+                    Some(value) => Ok(*value),
+                    None => Err(InterpreterError::CannotFindVariable { name }),
+                }
+            }
             Expression::Boolean(boolean) => {
                 let Boolean { value } = *boolean;
                 Ok(Value::Boolean(value))
@@ -72,6 +83,18 @@ impl Evaluator {
                 } else {
                     self.evaluate(val_else)
                 }
+            }
+            Expression::Let(r#let) => {
+                let Let {
+                    name,
+                    expr_to_bind,
+                    expr,
+                } = *r#let;
+
+                let expr_to_bind = self.evaluate(expr_to_bind)?;
+                self.environment.insert(name, expr_to_bind);
+
+                self.evaluate(expr)
             }
         }
     }
