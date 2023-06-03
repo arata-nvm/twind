@@ -10,11 +10,16 @@ pub type Program = Spanned<Vec<Spanned<Expression>>>;
 #[derive(Debug, Clone)]
 pub enum Expression {
     Integer(Box<Integer>),
+    Binary(Box<Binary>),
 }
 
 impl Expression {
     pub fn integer(value: i64) -> Self {
         Self::Integer(Box::new(Integer { value }))
+    }
+
+    pub fn binary(operator: BinaryOperator, lhs: Expression, rhs: Expression) -> Self {
+        Self::Binary(Box::new(Binary { operator, lhs, rhs }))
     }
 }
 
@@ -23,15 +28,35 @@ pub struct Integer {
     pub value: i64,
 }
 
+#[derive(Debug, Clone)]
+pub struct Binary {
+    pub operator: BinaryOperator,
+    pub lhs: Expression,
+    pub rhs: Expression,
+}
+
+#[derive(Debug, Clone)]
+pub enum BinaryOperator {
+    Add,
+}
+
 fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
-    let integer = filter_map(|span, token| match token {
-        Token::Integer(s) => Ok(Expression::integer(s.parse().unwrap())),
-        _ => Err(Simple::expected_input_found(span, vec![], Some(token))),
-    })
+    let integer = select! {
+          Token::Integer(s) => Expression::integer(s.parse().unwrap()),
+    }
     .labelled("integer");
 
-    integer
-        .map_with_span(|expr, span| (expr, span))
+    let add = integer
+        .then(
+            just(Token::Operator("+".to_string()))
+                .to(BinaryOperator::Add)
+                .then(integer)
+                .repeated(),
+        )
+        .foldl(|lhs, (op, rhs)| Expression::binary(op, lhs, rhs))
+        .labelled("add");
+
+    add.map_with_span(|expr, span| (expr, span))
         .repeated()
         .then_ignore(primitive::end())
         .map_with_span(|expressions, span| (expressions, span))

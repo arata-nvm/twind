@@ -19,7 +19,7 @@ pub fn interpret(s: &str) -> Result<Value, Vec<InterpreterError>> {
     let mut e = evaluator::Evaluator;
     let mut last_value = Value::Void;
     for (expr, _) in program.0 {
-        last_value = e.evaluate(&expr);
+        last_value = e.evaluate(expr).map_err(|err| vec![err])?;
     }
 
     Ok(last_value)

@@ -10,6 +10,9 @@ pub enum InterpreterError {
 
     #[error("{span:?}: {msg}")]
     UnexpectedToken { span: Span, msg: String },
+
+    #[error("{expect} expected, but {found} found ")]
+    UnexpectedValue { expect: String, found: String },
 }
 
 impl From<Simple<char>> for InterpreterError {
