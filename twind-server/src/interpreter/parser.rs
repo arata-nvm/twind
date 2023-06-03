@@ -149,6 +149,12 @@ pub struct OperatorFunction {
     pub op: BinaryOperator,
 }
 
+fn curry_function(param_names: Vec<String>, expr: Expression) -> Expression {
+    param_names.into_iter().fold(expr, |expr, param_name| {
+        Expression::function(param_name, expr)
+    })
+}
+
 fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
     let identifier = select! { Token::Identifier(s) => s };
 
@@ -225,11 +231,19 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
 
         let r#let = just(Token::Keyword(Keyword::Let))
             .ignore_then(identifier)
+            .then(identifier.repeated().or_not())
             .then_ignore(just(Token::Operator(Operator::Eq)))
             .then(expression.clone())
             .then_ignore(just(Token::Keyword(Keyword::In)))
             .then(expression.clone())
-            .map(|((name, expr_to_bind), expr)| Expression::r#let(name, expr_to_bind, expr));
+            .map(
+                |(((name, param_names), expr_to_bind), expr)| match param_names {
+                    Some(param_names) => {
+                        Expression::r#let(name, curry_function(param_names, expr_to_bind), expr)
+                    }
+                    None => Expression::r#let(name, expr_to_bind, expr),
+                },
+            );
 
         let function = just(Token::Keyword(Keyword::Fun))
             .ignore_then(identifier.repeated())
@@ -242,10 +256,14 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
 
     let r#let = just(Token::Keyword(Keyword::Let))
         .ignore_then(identifier)
+        .then(identifier.repeated().or_not())
         .then_ignore(just(Token::Operator(Operator::Eq)))
         .then(expression.clone())
         .then_ignore(just(Token::Keyword(Keyword::EndLet)))
-        .map(|(name, expr_to_bind)| Statement::r#let(name, expr_to_bind));
+        .map(|((name, param_names), expr_to_bind)| match param_names {
+            Some(param_names) => Statement::r#let(name, curry_function(param_names, expr_to_bind)),
+            None => Statement::r#let(name, expr_to_bind),
+        });
 
     let statement = r#let.or(expression.map(Statement::expression));
 
