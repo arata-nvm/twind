@@ -2,7 +2,7 @@ use super::{
     error::InterpreterError,
     parser::{
         Apply, Binary, BinaryOperator, Boolean, Expression, Function, Identifier, If, Integer,
-        LetExpression, LetStatement, Statement,
+        LetExpression, LetStatement, OperatorFunction, Statement,
     },
 };
 
@@ -81,7 +81,7 @@ impl Evaluator {
             Expression::Identifier(identifier) => {
                 let Identifier { name } = *identifier;
                 match self.find_variable(&name) {
-                    Some(value) => Ok(value.clone()),
+                    Some(value) => Ok(value),
                     None => Err(InterpreterError::CannotFindVariable { name }),
                 }
             }
@@ -147,6 +147,22 @@ impl Evaluator {
                 let mut e = Evaluator::new_with(newenv);
                 e.add_variable(param_name, arg);
                 e.evaluate_expr(expr)
+            }
+            Expression::OperatorFunction(operator_function) => {
+                let OperatorFunction { op } = *operator_function;
+
+                Ok(Value::Function(
+                    ".lhs".to_string(),
+                    Expression::function(
+                        ".rhs".to_string(),
+                        Expression::binary(
+                            op,
+                            Expression::identifier(".lhs".to_string()),
+                            Expression::identifier(".rhs".to_string()),
+                        ),
+                    ),
+                    self.environment.clone(),
+                ))
             }
         }
     }

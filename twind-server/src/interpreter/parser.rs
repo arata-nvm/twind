@@ -39,6 +39,7 @@ pub enum Expression {
     Let(Box<LetExpression>),
     Function(Box<Function>),
     Apply(Box<Apply>),
+    OperatorFunction(Box<OperatorFunction>),
 }
 
 impl Expression {
@@ -79,6 +80,10 @@ impl Expression {
 
     pub fn apply(func: Expression, arg: Expression) -> Self {
         Self::Apply(Box::new(Apply { func, arg }))
+    }
+
+    pub fn operator_function(op: BinaryOperator) -> Self {
+        Self::OperatorFunction(Box::new(OperatorFunction { op }))
     }
 }
 
@@ -139,6 +144,11 @@ pub struct Apply {
     pub arg: Expression,
 }
 
+#[derive(Debug, Clone)]
+pub struct OperatorFunction {
+    pub op: BinaryOperator,
+}
+
 fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
     let identifier = select! { Token::Identifier(s) => s };
 
@@ -151,7 +161,19 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
         }
         .labelled("value");
 
+        let operator_func = just(Token::Operator(Operator::ParenOpen))
+            .ignore_then(select! {
+              Token::Operator(Operator::Add) => BinaryOperator::Add,
+              Token::Operator(Operator::Sub) => BinaryOperator::Sub,
+              Token::Operator(Operator::Mul) => BinaryOperator::Mul,
+              Token::Operator(Operator::Div) => BinaryOperator::Div,
+              Token::Operator(Operator::Lt) => BinaryOperator::Lt,
+            })
+            .then_ignore(just(Token::Operator(Operator::ParenClose)))
+            .map(Expression::operator_function);
+
         let atom = value
+            .or(operator_func)
             .or(expression.clone().delimited_by(
                 just(Token::Operator(Operator::ParenOpen)),
                 just(Token::Operator(Operator::ParenClose)),
