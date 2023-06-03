@@ -38,6 +38,7 @@ impl Evaluator {
 
                 match operator {
                     BinaryOperator::Add => Ok(Value::Integer(lhs + rhs)),
+                    BinaryOperator::Sub => Ok(Value::Integer(lhs - rhs)),
                 }
             }
         }

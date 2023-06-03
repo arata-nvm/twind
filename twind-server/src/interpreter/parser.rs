@@ -38,6 +38,7 @@ pub struct Binary {
 #[derive(Debug, Clone)]
 pub enum BinaryOperator {
     Add,
+    Sub,
 }
 
 fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
@@ -46,17 +47,19 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
     }
     .labelled("integer");
 
-    let add = integer
+    let add_sub = integer
         .then(
             just(Token::Operator("+".to_string()))
                 .to(BinaryOperator::Add)
+                .or(just(Token::Operator("-".to_string())).to(BinaryOperator::Sub))
                 .then(integer)
                 .repeated(),
         )
         .foldl(|lhs, (op, rhs)| Expression::binary(op, lhs, rhs))
-        .labelled("add");
+        .labelled("add_sub");
 
-    add.map_with_span(|expr, span| (expr, span))
+    add_sub
+        .map_with_span(|expr, span| (expr, span))
         .repeated()
         .then_ignore(primitive::end())
         .map_with_span(|expressions, span| (expressions, span))
