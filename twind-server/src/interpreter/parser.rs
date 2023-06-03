@@ -39,6 +39,8 @@ pub struct Binary {
 pub enum BinaryOperator {
     Add,
     Sub,
+    Mul,
+    Div,
 }
 
 fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
@@ -47,12 +49,24 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
     }
     .labelled("integer");
 
-    let add_sub = integer
+    let mul_div = integer
+        .then(
+            just(Token::Operator("*".to_string()))
+                .to(BinaryOperator::Mul)
+                .or(just(Token::Operator("/".to_string())).to(BinaryOperator::Div))
+                .then(integer)
+                .repeated(),
+        )
+        .foldl(|lhs, (op, rhs)| Expression::binary(op, lhs, rhs))
+        .labelled("mul_div");
+
+    let add_sub = mul_div
+        .clone()
         .then(
             just(Token::Operator("+".to_string()))
                 .to(BinaryOperator::Add)
                 .or(just(Token::Operator("-".to_string())).to(BinaryOperator::Sub))
-                .then(integer)
+                .then(mul_div)
                 .repeated(),
         )
         .foldl(|lhs, (op, rhs)| Expression::binary(op, lhs, rhs))
