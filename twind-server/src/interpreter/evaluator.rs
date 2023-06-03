@@ -3,14 +3,14 @@ use super::{
     parser::{Binary, BinaryOperator, Expression, Integer},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Value {
     Void,
     Integer(i64),
 }
 
 impl Value {
-    pub fn as_integer(self) -> Result<i64, InterpreterError> {
+    pub fn to_integer(self) -> Result<i64, InterpreterError> {
         match self {
             Value::Integer(i) => Ok(i),
             _ => Err(InterpreterError::UnexpectedValue {
@@ -33,8 +33,8 @@ impl Evaluator {
             }
             Expression::Binary(binary) => {
                 let Binary { operator, lhs, rhs } = *binary;
-                let lhs = self.evaluate(lhs)?.as_integer()?;
-                let rhs = self.evaluate(rhs)?.as_integer()?;
+                let lhs = self.evaluate(lhs)?.to_integer()?;
+                let rhs = self.evaluate(rhs)?.to_integer()?;
 
                 match operator {
                     BinaryOperator::Add => Ok(Value::Integer(lhs + rhs)),
