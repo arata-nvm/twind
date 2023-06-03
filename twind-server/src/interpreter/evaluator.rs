@@ -50,11 +50,18 @@ impl Value {
 
 #[derive(Debug, Default)]
 pub struct Evaluator {
-    environment: Vec<(String, Value)>,
+    environment: Environment,
     scopes: Vec<usize>,
 }
 
 impl Evaluator {
+    pub fn new_with(environment: Environment) -> Self {
+        Self {
+            environment,
+            scopes: Vec::new(),
+        }
+    }
+
     pub fn evaluate(&mut self, stmt: Statement) -> Result<Value, InterpreterError> {
         match stmt {
             Statement::Let(r#let) => {
@@ -136,15 +143,10 @@ impl Evaluator {
                 let Apply { func, arg } = *apply;
                 let (param_name, expr, newenv) = self.evaluate_expr(func)?.to_function()?;
 
-                let oldenv = std::mem::replace(&mut self.environment, newenv);
-
                 let arg = self.evaluate_expr(arg)?;
-                self.add_variable(param_name, arg);
-                let ret_val = self.evaluate_expr(expr);
-
-                let _ = std::mem::replace(&mut self.environment, oldenv);
-
-                ret_val
+                let mut e = Evaluator::new_with(newenv);
+                e.add_variable(param_name, arg);
+                e.evaluate_expr(expr)
             }
         }
     }
