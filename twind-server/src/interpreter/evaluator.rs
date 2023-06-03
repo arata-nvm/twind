@@ -6,6 +6,7 @@ use super::{
 #[derive(Debug, Clone, Copy)]
 pub enum Value {
     Void,
+    Boolean(bool),
     Integer(i64),
 }
 
@@ -41,6 +42,7 @@ impl Evaluator {
                     BinaryOperator::Sub => Ok(Value::Integer(lhs - rhs)),
                     BinaryOperator::Mul => Ok(Value::Integer(lhs * rhs)),
                     BinaryOperator::Div => Ok(Value::Integer(lhs / rhs)),
+                    BinaryOperator::Lt => Ok(Value::Boolean(lhs < rhs)),
                 }
             }
         }

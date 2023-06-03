@@ -26,7 +26,7 @@ pub type TokenVec = Vec<Spanned<Token>>;
 fn lexer() -> impl Parser<char, TokenVec, Error = Simple<char>> {
     let integer = text::digits(10).map(Token::Integer);
 
-    let operator = one_of("+-*/").map(|c: char| Token::Operator(c.to_string()));
+    let operator = one_of("+-*/<").map(|c: char| Token::Operator(c.to_string()));
 
     let token = integer.or(operator);
 
