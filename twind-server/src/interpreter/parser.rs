@@ -1,8 +1,8 @@
-use chumsky::{prelude::*, primitive, Stream};
+use chumsky::{prelude::*, Stream};
 
 use super::{
     error::InterpreterError,
-    lexer::{Operator, Spanned, Token, TokenVec},
+    lexer::{Keyword, Operator, Spanned, Token, TokenVec},
 };
 
 pub type Program = Spanned<Vec<Spanned<Expression>>>;
@@ -11,6 +11,7 @@ pub type Program = Spanned<Vec<Spanned<Expression>>>;
 pub enum Expression {
     Integer(Box<Integer>),
     Binary(Box<Binary>),
+    If(Box<If>),
 }
 
 impl Expression {
@@ -20,6 +21,14 @@ impl Expression {
 
     pub fn binary(operator: BinaryOperator, lhs: Expression, rhs: Expression) -> Self {
         Self::Binary(Box::new(Binary { operator, lhs, rhs }))
+    }
+
+    pub fn r#if(condition: Expression, val_then: Expression, val_else: Expression) -> Self {
+        Self::If(Box::new(If {
+            condition,
+            val_then,
+            val_else,
+        }))
     }
 }
 
@@ -41,8 +50,14 @@ pub enum BinaryOperator {
     Sub,
     Mul,
     Div,
-
     Lt,
+}
+
+#[derive(Debug, Clone)]
+pub struct If {
+    pub condition: Expression,
+    pub val_then: Expression,
+    pub val_else: Expression,
 }
 
 fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
@@ -52,53 +67,54 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
         }
         .labelled("integer");
 
-        let atom = integer.or(expression.delimited_by(
+        let atom = integer.or(expression.clone().delimited_by(
             just(Token::Operator(Operator::ParenOpen)),
             just(Token::Operator(Operator::ParenClose)),
         ));
 
+        let op = just(Token::Operator(Operator::Mul))
+            .to(BinaryOperator::Mul)
+            .or(just(Token::Operator(Operator::Div)).to(BinaryOperator::Div));
         let mul_div = atom
             .clone()
-            .then(
-                just(Token::Operator(Operator::Mul))
-                    .to(BinaryOperator::Mul)
-                    .or(just(Token::Operator(Operator::Div)).to(BinaryOperator::Div))
-                    .then(atom)
-                    .repeated(),
-            )
+            .then(op.then(atom).repeated())
             .foldl(|lhs, (op, rhs)| Expression::binary(op, lhs, rhs))
             .labelled("mul_div");
 
+        let op = just(Token::Operator(Operator::Add))
+            .to(BinaryOperator::Add)
+            .or(just(Token::Operator(Operator::Sub)).to(BinaryOperator::Sub));
         let add_sub = mul_div
             .clone()
-            .then(
-                just(Token::Operator(Operator::Add))
-                    .to(BinaryOperator::Add)
-                    .or(just(Token::Operator(Operator::Sub)).to(BinaryOperator::Sub))
-                    .then(mul_div)
-                    .repeated(),
-            )
+            .then(op.then(mul_div).repeated())
             .foldl(|lhs, (op, rhs)| Expression::binary(op, lhs, rhs))
             .labelled("add_sub");
 
+        let op = just(Token::Operator(Operator::Lt)).to(BinaryOperator::Lt);
         let compare = add_sub
             .clone()
-            .then(
-                just(Token::Operator(Operator::Lt))
-                    .to(BinaryOperator::Lt)
-                    .then(add_sub)
-                    .repeated(),
-            )
+            .then(op.then(add_sub).repeated())
             .foldl(|lhs, (op, rhs)| Expression::binary(op, lhs, rhs))
             .labelled("compare");
 
-        compare
+        let r#if = just(Token::Keyword(Keyword::If))
+            .ignore_then(expression.clone())
+            .then_ignore(just(Token::Keyword(Keyword::Then)))
+            .then(expression.clone())
+            .then_ignore(just(Token::Keyword(Keyword::Else)))
+            .then(expression)
+            .map(|((condition, val_then), val_else)| {
+                Expression::r#if(condition, val_then, val_else)
+            })
+            .labelled("if");
+
+        r#if.or(compare)
     });
 
     expression
         .map_with_span(|expr, span| (expr, span))
         .repeated()
-        .then_ignore(primitive::end())
+        .then_ignore(end())
         .map_with_span(|expressions, span| (expressions, span))
 }
 

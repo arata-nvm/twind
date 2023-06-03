@@ -1,6 +1,6 @@
 use std::fmt;
 
-use chumsky::{prelude::*, primitive, recovery};
+use chumsky::{prelude::*, primitive, recovery, text::keyword};
 
 use super::error::InterpreterError;
 
@@ -8,6 +8,7 @@ use super::error::InterpreterError;
 pub enum Token {
     Integer(String),
     Operator(Operator),
+    Keyword(Keyword),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -21,11 +22,19 @@ pub enum Operator {
     Lt,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Keyword {
+    If,
+    Then,
+    Else,
+}
+
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Token::Integer(s) => write!(f, "{s}"),
             Token::Operator(s) => write!(f, "{s:?}"),
+            Token::Keyword(s) => write!(f, "{s:?}"),
         }
     }
 }
@@ -47,7 +56,12 @@ fn lexer() -> impl Parser<char, TokenVec, Error = Simple<char>> {
       '<' => Token::Operator(Operator::Lt),
     };
 
-    let token = integer.or(operator);
+    let keyword = keyword("if")
+        .to(Token::Keyword(Keyword::If))
+        .or(keyword("then").to(Token::Keyword(Keyword::Then)))
+        .or(keyword("else").to(Token::Keyword(Keyword::Else)));
+
+    let token = integer.or(operator).or(keyword);
 
     token
         .map_with_span(|token, span| (token, span))

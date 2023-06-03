@@ -1,6 +1,6 @@
 use super::{
     error::InterpreterError,
-    parser::{Binary, BinaryOperator, Expression, Integer},
+    parser::{Binary, BinaryOperator, Expression, If, Integer},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -11,6 +11,16 @@ pub enum Value {
 }
 
 impl Value {
+    pub fn to_boolean(self) -> Result<bool, InterpreterError> {
+        match self {
+            Value::Boolean(b) => Ok(b),
+            _ => Err(InterpreterError::UnexpectedValue {
+                expect: "boolean".to_string(),
+                found: format!("{self:?}"),
+            }),
+        }
+    }
+
     pub fn to_integer(self) -> Result<i64, InterpreterError> {
         match self {
             Value::Integer(i) => Ok(i),
@@ -43,6 +53,20 @@ impl Evaluator {
                     BinaryOperator::Mul => Ok(Value::Integer(lhs * rhs)),
                     BinaryOperator::Div => Ok(Value::Integer(lhs / rhs)),
                     BinaryOperator::Lt => Ok(Value::Boolean(lhs < rhs)),
+                }
+            }
+            Expression::If(r#if) => {
+                let If {
+                    condition,
+                    val_then,
+                    val_else,
+                } = *r#if;
+
+                let condition = self.evaluate(condition)?.to_boolean()?;
+                if condition {
+                    self.evaluate(val_then)
+                } else {
+                    self.evaluate(val_else)
                 }
             }
         }
