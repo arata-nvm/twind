@@ -1,9 +1,6 @@
 use super::{
     error::InterpreterError,
-    parser::{
-        Apply, Binary, BinaryOperator, Boolean, Expression, Function, Identifier, If, Integer,
-        LetExpression, LetStatement, OperatorFunction, Statement,
-    },
+    parser::{BinaryOperator, Expression, Statement},
 };
 
 pub type Environment = Vec<(String, Value)>;
@@ -64,9 +61,7 @@ impl Evaluator {
 
     pub fn evaluate(&mut self, stmt: Statement) -> Result<Value, InterpreterError> {
         match stmt {
-            Statement::Let(r#let) => {
-                let LetStatement { name, expr_to_bind } = r#let;
-
+            Statement::Let(name, expr_to_bind) => {
                 let expr_to_bind = self.evaluate_expr(expr_to_bind)?;
                 self.add_variable(name, expr_to_bind);
 
@@ -78,25 +73,15 @@ impl Evaluator {
 
     fn evaluate_expr(&mut self, expr: Expression) -> Result<Value, InterpreterError> {
         match expr {
-            Expression::Identifier(identifier) => {
-                let Identifier { name } = *identifier;
-                match self.find_variable(&name) {
-                    Some(value) => Ok(value),
-                    None => Err(InterpreterError::CannotFindVariable { name }),
-                }
-            }
-            Expression::Boolean(boolean) => {
-                let Boolean { value } = *boolean;
-                Ok(Value::Boolean(value))
-            }
-            Expression::Integer(integer) => {
-                let Integer { value } = *integer;
-                Ok(Value::Integer(value))
-            }
-            Expression::Binary(binary) => {
-                let Binary { operator, lhs, rhs } = *binary;
-                let lhs = self.evaluate_expr(lhs)?.to_integer()?;
-                let rhs = self.evaluate_expr(rhs)?.to_integer()?;
+            Expression::Identifier(name) => match self.find_variable(&name) {
+                Some(value) => Ok(value),
+                None => Err(InterpreterError::CannotFindVariable { name }),
+            },
+            Expression::Boolean(value) => Ok(Value::Boolean(value)),
+            Expression::Integer(value) => Ok(Value::Integer(value)),
+            Expression::Binary(operator, lhs, rhs) => {
+                let lhs = self.evaluate_expr(*lhs)?.to_integer()?;
+                let rhs = self.evaluate_expr(*rhs)?.to_integer()?;
 
                 match operator {
                     BinaryOperator::Add => Ok(Value::Integer(lhs + rhs)),
@@ -106,64 +91,46 @@ impl Evaluator {
                     BinaryOperator::Lt => Ok(Value::Boolean(lhs < rhs)),
                 }
             }
-            Expression::If(r#if) => {
-                let If {
-                    condition,
-                    val_then,
-                    val_else,
-                } = *r#if;
-
-                let condition = self.evaluate_expr(condition)?.to_boolean()?;
+            Expression::If(condition, val_then, val_else) => {
+                let condition = self.evaluate_expr(*condition)?.to_boolean()?;
                 if condition {
-                    self.evaluate_expr(val_then)
+                    self.evaluate_expr(*val_then)
                 } else {
-                    self.evaluate_expr(val_else)
+                    self.evaluate_expr(*val_else)
                 }
             }
-            Expression::Let(r#let) => {
-                let LetExpression {
-                    name,
-                    expr_to_bind,
-                    expr,
-                } = *r#let;
-
+            Expression::Let(name, expr_to_bind, expr) => {
                 self.push_context();
-                let expr_to_bind = self.evaluate_expr(expr_to_bind)?;
+                let expr_to_bind = self.evaluate_expr(*expr_to_bind)?;
                 self.add_variable(name, expr_to_bind);
-                let ret_val = self.evaluate_expr(expr);
+                let ret_val = self.evaluate_expr(*expr);
                 self.pop_context();
 
                 ret_val
             }
-            Expression::Function(function) => {
-                let Function { param_name, expr } = *function;
-                Ok(Value::Function(param_name, expr, self.environment.clone()))
+            Expression::Function(param_name, expr) => {
+                Ok(Value::Function(param_name, *expr, self.environment.clone()))
             }
-            Expression::Apply(apply) => {
-                let Apply { func, arg } = *apply;
-                let (param_name, expr, newenv) = self.evaluate_expr(func)?.to_function()?;
+            Expression::Apply(func, arg) => {
+                let (param_name, expr, newenv) = self.evaluate_expr(*func)?.to_function()?;
 
-                let arg = self.evaluate_expr(arg)?;
+                let arg = self.evaluate_expr(*arg)?;
                 let mut e = Evaluator::new_with(newenv);
                 e.add_variable(param_name, arg);
                 e.evaluate_expr(expr)
             }
-            Expression::OperatorFunction(operator_function) => {
-                let OperatorFunction { op } = *operator_function;
-
-                Ok(Value::Function(
-                    ".lhs".to_string(),
-                    Expression::function(
-                        ".rhs".to_string(),
-                        Expression::binary(
-                            op,
-                            Expression::identifier(".lhs".to_string()),
-                            Expression::identifier(".rhs".to_string()),
-                        ),
-                    ),
-                    self.environment.clone(),
-                ))
-            }
+            Expression::OperatorFunction(op) => Ok(Value::Function(
+                ".lhs".to_string(),
+                Expression::Function(
+                    ".rhs".to_string(),
+                    Box::new(Expression::Binary(
+                        op,
+                        Box::new(Expression::Identifier(".lhs".to_string())),
+                        Box::new(Expression::Identifier(".rhs".to_string())),
+                    )),
+                ),
+                self.environment.clone(),
+            )),
         }
     }
 

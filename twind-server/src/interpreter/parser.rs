@@ -9,104 +9,21 @@ pub type Program = Spanned<Vec<Spanned<Statement>>>;
 
 #[derive(Debug, Clone)]
 pub enum Statement {
-    Let(LetStatement),
+    Let(String, Expression),
     Expression(Expression),
-}
-
-impl Statement {
-    pub fn r#let(name: String, expr_to_bind: Expression) -> Self {
-        Self::Let(LetStatement { name, expr_to_bind })
-    }
-
-    pub fn expression(expr: Expression) -> Self {
-        Self::Expression(expr)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct LetStatement {
-    pub name: String,
-    pub expr_to_bind: Expression,
 }
 
 #[derive(Debug, Clone)]
 pub enum Expression {
-    Identifier(Box<Identifier>),
-    Boolean(Box<Boolean>),
-    Integer(Box<Integer>),
-    Binary(Box<Binary>),
-    If(Box<If>),
-    Let(Box<LetExpression>),
-    Function(Box<Function>),
-    Apply(Box<Apply>),
-    OperatorFunction(Box<OperatorFunction>),
-}
-
-impl Expression {
-    pub fn identifier(name: String) -> Self {
-        Self::Identifier(Box::new(Identifier { name }))
-    }
-    pub fn boolean(value: bool) -> Self {
-        Self::Boolean(Box::new(Boolean { value }))
-    }
-
-    pub fn integer(value: i64) -> Self {
-        Self::Integer(Box::new(Integer { value }))
-    }
-
-    pub fn binary(operator: BinaryOperator, lhs: Expression, rhs: Expression) -> Self {
-        Self::Binary(Box::new(Binary { operator, lhs, rhs }))
-    }
-
-    pub fn r#if(condition: Expression, val_then: Expression, val_else: Expression) -> Self {
-        Self::If(Box::new(If {
-            condition,
-            val_then,
-            val_else,
-        }))
-    }
-
-    pub fn r#let(name: String, expr_to_bind: Expression, expr: Expression) -> Self {
-        Self::Let(Box::new(LetExpression {
-            name,
-            expr_to_bind,
-            expr,
-        }))
-    }
-
-    pub fn function(param_name: String, expr: Expression) -> Self {
-        Self::Function(Box::new(Function { param_name, expr }))
-    }
-
-    pub fn apply(func: Expression, arg: Expression) -> Self {
-        Self::Apply(Box::new(Apply { func, arg }))
-    }
-
-    pub fn operator_function(op: BinaryOperator) -> Self {
-        Self::OperatorFunction(Box::new(OperatorFunction { op }))
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Identifier {
-    pub name: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct Boolean {
-    pub value: bool,
-}
-
-#[derive(Debug, Clone)]
-pub struct Integer {
-    pub value: i64,
-}
-
-#[derive(Debug, Clone)]
-pub struct Binary {
-    pub operator: BinaryOperator,
-    pub lhs: Expression,
-    pub rhs: Expression,
+    Identifier(String),
+    Boolean(bool),
+    Integer(i64),
+    Binary(BinaryOperator, Box<Expression>, Box<Expression>),
+    If(Box<Expression>, Box<Expression>, Box<Expression>),
+    Let(String, Box<Expression>, Box<Expression>),
+    Function(String, Box<Expression>),
+    Apply(Box<Expression>, Box<Expression>),
+    OperatorFunction(BinaryOperator),
 }
 
 #[derive(Debug, Clone)]
@@ -118,40 +35,9 @@ pub enum BinaryOperator {
     Lt,
 }
 
-#[derive(Debug, Clone)]
-pub struct If {
-    pub condition: Expression,
-    pub val_then: Expression,
-    pub val_else: Expression,
-}
-
-#[derive(Debug, Clone)]
-pub struct LetExpression {
-    pub name: String,
-    pub expr_to_bind: Expression,
-    pub expr: Expression,
-}
-
-#[derive(Debug, Clone)]
-pub struct Function {
-    pub param_name: String,
-    pub expr: Expression,
-}
-
-#[derive(Debug, Clone)]
-pub struct Apply {
-    pub func: Expression,
-    pub arg: Expression,
-}
-
-#[derive(Debug, Clone)]
-pub struct OperatorFunction {
-    pub op: BinaryOperator,
-}
-
 fn curry_function(param_names: Vec<String>, expr: Expression) -> Expression {
     param_names.into_iter().fold(expr, |expr, param_name| {
-        Expression::function(param_name, expr)
+        Expression::Function(param_name, Box::new(expr))
     })
 }
 
@@ -160,10 +46,10 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
 
     let expression = recursive(|expression| {
         let value = select! {
-              Token::Keyword(Keyword::True) => Expression::boolean(true),
-              Token::Keyword(Keyword::False) => Expression::boolean(false),
-              Token::Integer(s) => Expression::integer(s.parse().unwrap()),
-              Token::Identifier(s) => Expression::identifier(s),
+              Token::Keyword(Keyword::True) => Expression::Boolean(true),
+              Token::Keyword(Keyword::False) => Expression::Boolean(false),
+              Token::Integer(s) => Expression::Integer(s.parse().unwrap()),
+              Token::Identifier(s) => Expression::Identifier(s),
         }
         .labelled("value");
 
@@ -176,7 +62,7 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
               Token::Operator(Operator::Lt) => BinaryOperator::Lt,
             })
             .then_ignore(just(Token::Operator(Operator::ParenClose)))
-            .map(Expression::operator_function);
+            .map(Expression::OperatorFunction);
 
         let atom = value
             .or(operator_func)
@@ -189,7 +75,7 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
         let apply = atom
             .clone()
             .then(atom.clone().repeated())
-            .foldl(Expression::apply)
+            .foldl(|func, arg| Expression::Apply(Box::new(func), Box::new(arg)))
             .or(atom)
             .labelled("apply");
 
@@ -199,7 +85,7 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
         let mul_div = apply
             .clone()
             .then(op.then(apply).repeated())
-            .foldl(|lhs, (op, rhs)| Expression::binary(op, lhs, rhs))
+            .foldl(|lhs, (op, rhs)| Expression::Binary(op, Box::new(lhs), Box::new(rhs)))
             .labelled("mul_div");
 
         let op = just(Token::Operator(Operator::Add))
@@ -208,14 +94,14 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
         let add_sub = mul_div
             .clone()
             .then(op.then(mul_div).repeated())
-            .foldl(|lhs, (op, rhs)| Expression::binary(op, lhs, rhs))
+            .foldl(|lhs, (op, rhs)| Expression::Binary(op, Box::new(lhs), Box::new(rhs)))
             .labelled("add_sub");
 
         let op = just(Token::Operator(Operator::Lt)).to(BinaryOperator::Lt);
         let compare = add_sub
             .clone()
             .then(op.then(add_sub).repeated())
-            .foldl(|lhs, (op, rhs)| Expression::binary(op, lhs, rhs))
+            .foldl(|lhs, (op, rhs)| Expression::Binary(op, Box::new(lhs), Box::new(rhs)))
             .labelled("compare");
 
         let r#if = just(Token::Keyword(Keyword::If))
@@ -225,7 +111,7 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
             .then_ignore(just(Token::Keyword(Keyword::Else)))
             .then(expression.clone())
             .map(|((condition, val_then), val_else)| {
-                Expression::r#if(condition, val_then, val_else)
+                Expression::If(Box::new(condition), Box::new(val_then), Box::new(val_else))
             })
             .labelled("if");
 
@@ -238,10 +124,12 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
             .then(expression.clone())
             .map(
                 |(((name, param_names), expr_to_bind), expr)| match param_names {
-                    Some(param_names) => {
-                        Expression::r#let(name, curry_function(param_names, expr_to_bind), expr)
-                    }
-                    None => Expression::r#let(name, expr_to_bind, expr),
+                    Some(param_names) => Expression::Let(
+                        name,
+                        Box::new(curry_function(param_names, expr_to_bind)),
+                        Box::new(expr),
+                    ),
+                    None => Expression::Let(name, Box::new(expr_to_bind), Box::new(expr)),
                 },
             );
 
@@ -249,7 +137,7 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
             .ignore_then(identifier.repeated())
             .then_ignore(just(Token::Keyword(Keyword::Arrow)))
             .then(expression)
-            .foldr(Expression::function);
+            .foldr(|param, expr| Expression::Function(param, Box::new(expr)));
 
         r#if.or(r#let).or(function).or(compare)
     });
@@ -261,11 +149,11 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
         .then(expression.clone())
         .then_ignore(just(Token::Keyword(Keyword::EndLet)))
         .map(|((name, param_names), expr_to_bind)| match param_names {
-            Some(param_names) => Statement::r#let(name, curry_function(param_names, expr_to_bind)),
-            None => Statement::r#let(name, expr_to_bind),
+            Some(param_names) => Statement::Let(name, curry_function(param_names, expr_to_bind)),
+            None => Statement::Let(name, expr_to_bind),
         });
 
-    let statement = r#let.or(expression.map(Statement::expression));
+    let statement = r#let.or(expression.map(Statement::Expression));
 
     statement
         .map_with_span(|expr, span| (expr, span))
