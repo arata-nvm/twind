@@ -2,16 +2,10 @@ use chumsky::{prelude::*, Stream};
 
 use super::{
     error::InterpreterError,
-    lexer::{Keyword, Operator, Spanned, Token, TokenVec},
+    lexer::{Keyword, Operator, Token, TokenVec},
 };
 
-pub type Program = Spanned<Vec<Spanned<Statement>>>;
-
-#[derive(Debug, Clone)]
-pub enum Statement {
-    Let(String, Expression),
-    Expression(Expression),
-}
+pub type Program = Vec<Expression>;
 
 #[derive(Debug, Clone)]
 pub enum Expression {
@@ -42,9 +36,9 @@ fn curry_function(param_names: Vec<String>, expr: Expression) -> Expression {
 }
 
 fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
-    let identifier = select! { Token::Identifier(s) => s };
-
     let expression = recursive(|expression| {
+        let identifier = select! { Token::Identifier(s) => s };
+
         let value = select! {
               Token::Keyword(Keyword::True) => Expression::Boolean(true),
               Token::Keyword(Keyword::False) => Expression::Boolean(false),
@@ -142,24 +136,7 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
         r#if.or(r#let).or(function).or(compare)
     });
 
-    let r#let = just(Token::Keyword(Keyword::Let))
-        .ignore_then(identifier)
-        .then(identifier.repeated().or_not())
-        .then_ignore(just(Token::Operator(Operator::Eq)))
-        .then(expression.clone())
-        .then_ignore(just(Token::Keyword(Keyword::EndLet)))
-        .map(|((name, param_names), expr_to_bind)| match param_names {
-            Some(param_names) => Statement::Let(name, curry_function(param_names, expr_to_bind)),
-            None => Statement::Let(name, expr_to_bind),
-        });
-
-    let statement = r#let.or(expression.map(Statement::Expression));
-
-    statement
-        .map_with_span(|expr, span| (expr, span))
-        .repeated()
-        .then_ignore(end())
-        .map_with_span(|expressions, span| (expressions, span))
+    expression.repeated().then_ignore(end())
 }
 
 pub fn parse(tokens: TokenVec) -> (Option<Program>, Vec<InterpreterError>) {

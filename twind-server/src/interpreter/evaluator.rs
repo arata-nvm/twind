@@ -1,6 +1,6 @@
 use super::{
     error::InterpreterError,
-    parser::{BinaryOperator, Expression, Statement},
+    parser::{BinaryOperator, Expression},
 };
 
 pub type Environment = Vec<(String, Value)>;
@@ -59,19 +59,7 @@ impl Evaluator {
         }
     }
 
-    pub fn evaluate(&mut self, stmt: Statement) -> Result<Value, InterpreterError> {
-        match stmt {
-            Statement::Let(name, expr_to_bind) => {
-                let expr_to_bind = self.evaluate_expr(expr_to_bind)?;
-                self.add_variable(name, expr_to_bind);
-
-                Ok(Value::Void)
-            }
-            Statement::Expression(expr) => self.evaluate_expr(expr),
-        }
-    }
-
-    fn evaluate_expr(&mut self, expr: Expression) -> Result<Value, InterpreterError> {
+    pub fn evaluate(&mut self, expr: Expression) -> Result<Value, InterpreterError> {
         match expr {
             Expression::Identifier(name) => match self.find_variable(&name) {
                 Some(value) => Ok(value),
@@ -80,8 +68,8 @@ impl Evaluator {
             Expression::Boolean(value) => Ok(Value::Boolean(value)),
             Expression::Integer(value) => Ok(Value::Integer(value)),
             Expression::Binary(operator, lhs, rhs) => {
-                let lhs = self.evaluate_expr(*lhs)?.to_integer()?;
-                let rhs = self.evaluate_expr(*rhs)?.to_integer()?;
+                let lhs = self.evaluate(*lhs)?.to_integer()?;
+                let rhs = self.evaluate(*rhs)?.to_integer()?;
 
                 match operator {
                     BinaryOperator::Add => Ok(Value::Integer(lhs + rhs)),
@@ -92,18 +80,18 @@ impl Evaluator {
                 }
             }
             Expression::If(condition, val_then, val_else) => {
-                let condition = self.evaluate_expr(*condition)?.to_boolean()?;
+                let condition = self.evaluate(*condition)?.to_boolean()?;
                 if condition {
-                    self.evaluate_expr(*val_then)
+                    self.evaluate(*val_then)
                 } else {
-                    self.evaluate_expr(*val_else)
+                    self.evaluate(*val_else)
                 }
             }
             Expression::Let(name, expr_to_bind, expr) => {
                 self.push_context();
-                let expr_to_bind = self.evaluate_expr(*expr_to_bind)?;
+                let expr_to_bind = self.evaluate(*expr_to_bind)?;
                 self.add_variable(name, expr_to_bind);
-                let ret_val = self.evaluate_expr(*expr);
+                let ret_val = self.evaluate(*expr);
                 self.pop_context();
 
                 ret_val
@@ -112,12 +100,12 @@ impl Evaluator {
                 Ok(Value::Function(param_name, *expr, self.environment.clone()))
             }
             Expression::Apply(func, arg) => {
-                let (param_name, expr, newenv) = self.evaluate_expr(*func)?.to_function()?;
+                let (param_name, expr, newenv) = self.evaluate(*func)?.to_function()?;
 
-                let arg = self.evaluate_expr(*arg)?;
+                let arg = self.evaluate(*arg)?;
                 let mut e = Evaluator::new_with(newenv);
                 e.add_variable(param_name, arg);
-                e.evaluate_expr(expr)
+                e.evaluate(expr)
             }
             Expression::OperatorFunction(op) => Ok(Value::Function(
                 ".lhs".to_string(),

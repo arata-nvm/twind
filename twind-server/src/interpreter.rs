@@ -17,8 +17,8 @@ pub fn interpret(s: &str, e: &mut evaluator::Evaluator) -> Result<Value, Vec<Int
     };
 
     let mut last_value = Value::Void;
-    for (stmt, _) in program.0 {
-        last_value = e.evaluate(stmt).map_err(|err| vec![err])?;
+    for expr in program {
+        last_value = e.evaluate(expr).map_err(|err| vec![err])?;
     }
 
     Ok(last_value)
