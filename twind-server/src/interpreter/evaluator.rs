@@ -87,15 +87,21 @@ impl Evaluator {
                     self.evaluate(*val_else)
                 }
             }
-            Expression::Let(name, expr_to_bind, expr) => {
-                self.push_context();
-                let expr_to_bind = self.evaluate(*expr_to_bind)?;
-                self.add_variable(name, expr_to_bind);
-                let ret_val = self.evaluate(*expr);
-                self.pop_context();
-
-                ret_val
-            }
+            Expression::Let(name, expr_to_bind, expr) => match expr {
+                None => {
+                    let expr_to_bind = self.evaluate(*expr_to_bind)?;
+                    self.add_variable(name, expr_to_bind);
+                    Ok(Value::Void)
+                }
+                Some(expr) => {
+                    self.push_context();
+                    let expr_to_bind = self.evaluate(*expr_to_bind)?;
+                    self.add_variable(name, expr_to_bind);
+                    let ret_val = self.evaluate(*expr);
+                    self.pop_context();
+                    ret_val
+                }
+            },
             Expression::Function(param_name, expr) => {
                 Ok(Value::Function(param_name, *expr, self.environment.clone()))
             }

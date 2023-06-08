@@ -14,7 +14,7 @@ pub enum Expression {
     Integer(i64),
     Binary(BinaryOperator, Box<Expression>, Box<Expression>),
     If(Box<Expression>, Box<Expression>, Box<Expression>),
-    Let(String, Box<Expression>, Box<Expression>),
+    Let(String, Box<Expression>, Option<Box<Expression>>),
     Function(String, Box<Expression>),
     Apply(Box<Expression>, Box<Expression>),
     OperatorFunction(BinaryOperator),
@@ -114,16 +114,21 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
             .then(identifier.repeated().or_not())
             .then_ignore(just(Token::Operator(Operator::Eq)))
             .then(expression.clone())
-            .then_ignore(just(Token::Keyword(Keyword::In)))
-            .then(expression.clone())
+            .then(
+                just(Token::Keyword(Keyword::EndLet))
+                    .map(|_| None)
+                    .or(just(Token::Keyword(Keyword::In))
+                        .ignore_then(expression.clone())
+                        .map(|expr| Some(expr))),
+            )
             .map(
                 |(((name, param_names), expr_to_bind), expr)| match param_names {
                     Some(param_names) => Expression::Let(
                         name,
                         Box::new(curry_function(param_names, expr_to_bind)),
-                        Box::new(expr),
+                        expr.map(Box::new),
                     ),
-                    None => Expression::Let(name, Box::new(expr_to_bind), Box::new(expr)),
+                    None => Expression::Let(name, Box::new(expr_to_bind), expr.map(Box::new)),
                 },
             );
 
