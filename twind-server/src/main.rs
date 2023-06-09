@@ -3,7 +3,7 @@ use std::{
     io::{stdin, stdout, Write},
 };
 
-use interpreter::evaluator;
+use interpreter::evaluator::Environment;
 
 mod interpreter;
 
@@ -14,13 +14,13 @@ fn main() {
         repl_loop();
     } else {
         let s = fs::read_to_string(&args[1]).expect("cannot read file");
-        let mut e = evaluator::Evaluator::default();
+        let mut e = Environment::new();
         interpret(&s, &mut e);
     }
 }
 
 fn repl_loop() {
-    let mut e = evaluator::Evaluator::default();
+    let mut e = Environment::new();
 
     loop {
         print!("> ");
@@ -35,7 +35,7 @@ fn repl_loop() {
     }
 }
 
-fn interpret(s: &str, e: &mut evaluator::Evaluator) {
+fn interpret(s: &str, e: &mut Environment) {
     match interpreter::interpret(s, e) {
         Ok(value) => println!("{value:?}"),
         Err(errors) => {

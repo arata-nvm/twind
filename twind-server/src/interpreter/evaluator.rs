@@ -3,7 +3,26 @@ use super::{
     parser::{BinaryOperator, Expression},
 };
 
-pub type Environment = Vec<(String, Value)>;
+#[derive(Debug, Clone)]
+pub struct Environment(Vec<(String, Value)>);
+
+impl Environment {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    fn add_variable(&mut self, name: String, value: Value) {
+        self.0.push((name, value));
+    }
+
+    fn find_variable(&self, name: &String) -> Option<Value> {
+        self.0
+            .iter()
+            .rev()
+            .find(|(var_name, _)| var_name == name)
+            .map(|(_, value)| value.clone())
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -45,107 +64,65 @@ impl Value {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct Evaluator {
-    environment: Environment,
-    scopes: Vec<usize>,
-}
+pub fn evaluate(expr: Expression, env: &mut Environment) -> Result<Value, InterpreterError> {
+    match expr {
+        Expression::Identifier(name) => match env.find_variable(&name) {
+            Some(value) => Ok(value),
+            None => Err(InterpreterError::CannotFindVariable { name }),
+        },
+        Expression::Boolean(value) => Ok(Value::Boolean(value)),
+        Expression::Integer(value) => Ok(Value::Integer(value)),
+        Expression::Binary(operator, lhs, rhs) => {
+            let lhs = evaluate(*lhs, env)?.to_integer()?;
+            let rhs = evaluate(*rhs, env)?.to_integer()?;
 
-impl Evaluator {
-    pub fn new_with(environment: Environment) -> Self {
-        Self {
-            environment,
-            scopes: Vec::new(),
+            match operator {
+                BinaryOperator::Add => Ok(Value::Integer(lhs + rhs)),
+                BinaryOperator::Sub => Ok(Value::Integer(lhs - rhs)),
+                BinaryOperator::Mul => Ok(Value::Integer(lhs * rhs)),
+                BinaryOperator::Div => Ok(Value::Integer(lhs / rhs)),
+                BinaryOperator::Lt => Ok(Value::Boolean(lhs < rhs)),
+            }
         }
-    }
-
-    pub fn evaluate(&mut self, expr: Expression) -> Result<Value, InterpreterError> {
-        match expr {
-            Expression::Identifier(name) => match self.find_variable(&name) {
-                Some(value) => Ok(value),
-                None => Err(InterpreterError::CannotFindVariable { name }),
-            },
-            Expression::Boolean(value) => Ok(Value::Boolean(value)),
-            Expression::Integer(value) => Ok(Value::Integer(value)),
-            Expression::Binary(operator, lhs, rhs) => {
-                let lhs = self.evaluate(*lhs)?.to_integer()?;
-                let rhs = self.evaluate(*rhs)?.to_integer()?;
-
-                match operator {
-                    BinaryOperator::Add => Ok(Value::Integer(lhs + rhs)),
-                    BinaryOperator::Sub => Ok(Value::Integer(lhs - rhs)),
-                    BinaryOperator::Mul => Ok(Value::Integer(lhs * rhs)),
-                    BinaryOperator::Div => Ok(Value::Integer(lhs / rhs)),
-                    BinaryOperator::Lt => Ok(Value::Boolean(lhs < rhs)),
-                }
+        Expression::If(condition, val_then, val_else) => {
+            let condition = evaluate(*condition, env)?.to_boolean()?;
+            if condition {
+                evaluate(*val_then, env)
+            } else {
+                evaluate(*val_else, env)
             }
-            Expression::If(condition, val_then, val_else) => {
-                let condition = self.evaluate(*condition)?.to_boolean()?;
-                if condition {
-                    self.evaluate(*val_then)
-                } else {
-                    self.evaluate(*val_else)
-                }
-            }
-            Expression::Let(name, expr_to_bind, expr) => match expr {
-                None => {
-                    let expr_to_bind = self.evaluate(*expr_to_bind)?;
-                    self.add_variable(name, expr_to_bind);
-                    Ok(Value::Void)
-                }
-                Some(expr) => {
-                    self.push_context();
-                    let expr_to_bind = self.evaluate(*expr_to_bind)?;
-                    self.add_variable(name, expr_to_bind);
-                    let ret_val = self.evaluate(*expr);
-                    self.pop_context();
-                    ret_val
-                }
-            },
-            Expression::Function(param_name, expr) => {
-                Ok(Value::Function(param_name, *expr, self.environment.clone()))
-            }
-            Expression::Apply(func, arg) => {
-                let (param_name, expr, newenv) = self.evaluate(*func)?.to_function()?;
-
-                let arg = self.evaluate(*arg)?;
-                let mut e = Evaluator::new_with(newenv);
-                e.add_variable(param_name, arg);
-                e.evaluate(expr)
-            }
-            Expression::OperatorFunction(op) => Ok(Value::Function(
-                ".lhs".to_string(),
-                Expression::Function(
-                    ".rhs".to_string(),
-                    Box::new(Expression::Binary(
-                        op,
-                        Box::new(Expression::Identifier(".lhs".to_string())),
-                        Box::new(Expression::Identifier(".rhs".to_string())),
-                    )),
-                ),
-                self.environment.clone(),
-            )),
         }
-    }
-
-    fn add_variable(&mut self, name: String, value: Value) {
-        self.environment.push((name, value));
-    }
-
-    fn find_variable(&self, name: &String) -> Option<Value> {
-        self.environment
-            .iter()
-            .rev()
-            .find(|(var_name, _)| var_name == name)
-            .map(|(_, value)| value.clone())
-    }
-
-    fn push_context(&mut self) {
-        self.scopes.push(self.environment.len());
-    }
-
-    fn pop_context(&mut self) {
-        let scope = self.scopes.pop().unwrap();
-        self.environment.truncate(scope);
+        Expression::Let(name, expr_to_bind, expr) => match expr {
+            None => {
+                let expr_to_bind = evaluate(*expr_to_bind, env)?;
+                env.add_variable(name, expr_to_bind);
+                Ok(Value::Void)
+            }
+            Some(expr) => {
+                let mut newenv = env.clone();
+                newenv.add_variable(name, evaluate(*expr_to_bind, env)?);
+                evaluate(*expr, &mut newenv)
+            }
+        },
+        Expression::Function(param_name, expr) => {
+            Ok(Value::Function(param_name, *expr, env.clone()))
+        }
+        Expression::Apply(func, arg) => {
+            let (param_name, expr, mut newenv) = evaluate(*func, env)?.to_function()?;
+            newenv.add_variable(param_name, evaluate(*arg, env)?);
+            evaluate(expr, &mut newenv)
+        }
+        Expression::OperatorFunction(op) => Ok(Value::Function(
+            ".lhs".to_string(),
+            Expression::Function(
+                ".rhs".to_string(),
+                Box::new(Expression::Binary(
+                    op,
+                    Box::new(Expression::Identifier(".lhs".to_string())),
+                    Box::new(Expression::Identifier(".rhs".to_string())),
+                )),
+            ),
+            env.clone(),
+        )),
     }
 }
