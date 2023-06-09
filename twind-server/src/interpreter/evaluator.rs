@@ -1,28 +1,10 @@
 use super::{
+    environment,
     error::InterpreterError,
     parser::{BinaryOperator, Expression},
 };
 
-#[derive(Debug, Clone)]
-pub struct Environment(Vec<(String, Value)>);
-
-impl Environment {
-    pub fn new() -> Self {
-        Self(Vec::new())
-    }
-
-    fn add_variable(&mut self, name: String, value: Value) {
-        self.0.push((name, value));
-    }
-
-    fn find_variable(&self, name: &String) -> Option<Value> {
-        self.0
-            .iter()
-            .rev()
-            .find(|(var_name, _)| var_name == name)
-            .map(|(_, value)| value.clone())
-    }
-}
+pub type Environment = environment::Environment<Value>;
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -66,7 +48,7 @@ impl Value {
 
 pub fn evaluate(expr: Expression, env: &mut Environment) -> Result<Value, InterpreterError> {
     match expr {
-        Expression::Identifier(name) => match env.find_variable(&name) {
+        Expression::Identifier(name) => match env.lookup(&name) {
             Some(value) => Ok(value),
             None => Err(InterpreterError::CannotFindVariable { name }),
         },
@@ -95,12 +77,12 @@ pub fn evaluate(expr: Expression, env: &mut Environment) -> Result<Value, Interp
         Expression::Let(name, expr_to_bind, expr) => match expr {
             None => {
                 let expr_to_bind = evaluate(*expr_to_bind, env)?;
-                env.add_variable(name, expr_to_bind);
+                env.expand(name, expr_to_bind);
                 Ok(Value::Void)
             }
             Some(expr) => {
                 let mut newenv = env.clone();
-                newenv.add_variable(name, evaluate(*expr_to_bind, env)?);
+                newenv.expand(name, evaluate(*expr_to_bind, env)?);
                 evaluate(*expr, &mut newenv)
             }
         },
@@ -109,7 +91,7 @@ pub fn evaluate(expr: Expression, env: &mut Environment) -> Result<Value, Interp
         }
         Expression::Apply(func, arg) => {
             let (param_name, expr, mut newenv) = evaluate(*func, env)?.to_function()?;
-            newenv.add_variable(param_name, evaluate(*arg, env)?);
+            newenv.expand(param_name, evaluate(*arg, env)?);
             evaluate(expr, &mut newenv)
         }
         Expression::OperatorFunction(op) => Ok(Value::Function(
