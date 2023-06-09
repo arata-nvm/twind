@@ -3,7 +3,7 @@ use std::{
     io::{stdin, stdout, Write},
 };
 
-use interpreter::evaluator::Environment;
+use interpreter::{evaluator, typing};
 
 mod interpreter;
 
@@ -14,13 +14,15 @@ fn main() {
         repl_loop();
     } else {
         let s = fs::read_to_string(&args[1]).expect("cannot read file");
-        let mut e = Environment::new();
-        interpret(&s, &mut e);
+        let mut venv = evaluator::Environment::new();
+        let mut tenv = typing::Environment::new();
+        interpret(&s, &mut venv, &mut tenv);
     }
 }
 
 fn repl_loop() {
-    let mut e = Environment::new();
+    let mut venv = evaluator::Environment::new();
+    let mut tenv = typing::Environment::new();
 
     loop {
         print!("> ");
@@ -31,12 +33,12 @@ fn repl_loop() {
             .read_line(&mut s)
             .expect("failed to stdin::read_line");
 
-        interpret(&s, &mut e);
+        interpret(&s, &mut venv, &mut tenv);
     }
 }
 
-fn interpret(s: &str, e: &mut Environment) {
-    match interpreter::interpret(s, e) {
+fn interpret(s: &str, venv: &mut evaluator::Environment, tenv: &mut typing::Environment) {
+    match interpreter::interpret(s, venv, tenv) {
         Ok((value, typ)) => {
             println!("{value}");
             println!(": {typ}");

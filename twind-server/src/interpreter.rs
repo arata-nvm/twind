@@ -1,8 +1,4 @@
-use self::{
-    error::InterpreterError,
-    evaluator::{Environment, Value},
-    typing::Type,
-};
+use self::{error::InterpreterError, evaluator::Value, typing::Type};
 
 pub mod environment;
 pub mod error;
@@ -11,7 +7,11 @@ pub mod lexer;
 pub mod parser;
 pub mod typing;
 
-pub fn interpret(s: &str, e: &mut Environment) -> Result<(Value, Type), Vec<InterpreterError>> {
+pub fn interpret(
+    s: &str,
+    venv: &mut evaluator::Environment,
+    tenv: &mut typing::Environment,
+) -> Result<(Value, Type), Vec<InterpreterError>> {
     let (tokens, errors) = lexer::tokenize(s);
     let Some(tokens) = tokens else {
       return Err(errors);
@@ -25,8 +25,8 @@ pub fn interpret(s: &str, e: &mut Environment) -> Result<(Value, Type), Vec<Inte
     let mut last_value = Value::Void;
     let mut last_type = Type::Void;
     for expr in program {
-        last_type = typing::infer_type(&expr).map_err(|err| vec![err])?;
-        last_value = evaluator::evaluate(expr, e).map_err(|err| vec![err])?;
+        last_type = typing::infer_type(&expr, tenv).map_err(|err| vec![err])?;
+        last_value = evaluator::evaluate(expr, venv).map_err(|err| vec![err])?;
     }
 
     Ok((last_value, last_type))

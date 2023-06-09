@@ -2,9 +2,11 @@ use std::fmt;
 
 use crate::interpreter::parser::BinaryOperator;
 
-use super::{error::InterpreterError, parser::Expression};
+use super::{environment, error::InterpreterError, parser::Expression};
 
-#[derive(Debug, PartialEq, Eq)]
+pub type Environment = environment::Environment<Type>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
     Void,
     Boolean,
@@ -21,14 +23,16 @@ impl fmt::Display for Type {
     }
 }
 
-pub fn infer_type(expr: &Expression) -> Result<Type, InterpreterError> {
+pub fn infer_type(expr: &Expression, env: &mut Environment) -> Result<Type, InterpreterError> {
     match expr {
-        Expression::Identifier(_) => todo!(),
+        Expression::Identifier(name) => env
+            .lookup(name)
+            .ok_or(InterpreterError::CannotFindVariable { name: name.clone() }),
         Expression::Boolean(_) => Ok(Type::Boolean),
         Expression::Integer(_) => Ok(Type::Integer),
         Expression::Binary(op, lhs, rhs) => {
-            let lhs = infer_type(lhs)?;
-            let rhs = infer_type(rhs)?;
+            let lhs = infer_type(lhs, env)?;
+            let rhs = infer_type(rhs, env)?;
             match (op, lhs, rhs) {
                 (BinaryOperator::Lt, Type::Integer, Type::Integer) => Ok(Type::Boolean),
                 (_, Type::Integer, Type::Integer) => Ok(Type::Integer),
@@ -39,9 +43,9 @@ pub fn infer_type(expr: &Expression) -> Result<Type, InterpreterError> {
             }
         }
         Expression::If(cond, val_then, val_else) => {
-            let cond = infer_type(cond)?;
-            let val_then = infer_type(val_then)?;
-            let val_else = infer_type(val_else)?;
+            let cond = infer_type(cond, env)?;
+            let val_then = infer_type(val_then, env)?;
+            let val_else = infer_type(val_else, env)?;
 
             if !matches!(cond, Type::Boolean) {
                 return Err(InterpreterError::UnexpectedType {
@@ -59,7 +63,14 @@ pub fn infer_type(expr: &Expression) -> Result<Type, InterpreterError> {
 
             Ok(val_then)
         }
-        Expression::Let(_, _, _) => todo!(),
+        Expression::Let(name, expr_to_bind, expr) => {
+            let expr_to_bind = infer_type(&**expr_to_bind, env)?;
+            if let Some(expr) = expr {
+                infer_type(expr, &mut env.expanded(name.clone(), expr_to_bind))
+            } else {
+                Ok(Type::Void)
+            }
+        }
         Expression::LetRec(_, _, _) => todo!(),
         Expression::Function(_, _) => todo!(),
         Expression::Apply(_, _) => todo!(),
