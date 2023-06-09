@@ -17,6 +17,7 @@ pub enum Expression {
     Binary(BinaryOperator, Box<Expression>, Box<Expression>),
     If(Box<Expression>, Box<Expression>, Box<Expression>),
     Let(String, Box<Expression>, Option<Box<Expression>>),
+    LetRec(String, Box<Expression>, Option<Box<Expression>>),
     Function(String, Box<Expression>),
     Apply(Box<Expression>, Box<Expression>),
     OperatorFunction(BinaryOperator),
@@ -46,6 +47,12 @@ impl fmt::Display for Expression {
             }
             Expression::Let(name, expr_to_bind, None) => {
                 write!(f, "let {name} = {expr_to_bind}")
+            }
+            Expression::LetRec(name, expr_to_bind, Some(expr)) => {
+                write!(f, "let rec {name} = {expr_to_bind} in {expr}")
+            }
+            Expression::LetRec(name, expr_to_bind, None) => {
+                write!(f, "let rec {name} = {expr_to_bind}")
             }
             Expression::Function(param, expr) => write!(f, "func {param} -> {expr}"),
             Expression::Apply(func, arg) => write!(f, "{func} {arg}"),
@@ -146,6 +153,27 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
             })
             .labelled("if");
 
+        let letrec = just(Token::Keyword(Keyword::Let))
+            .ignore_then(just(Token::Keyword(Keyword::Rec)))
+            .ignore_then(identifier)
+            .then(identifier.repeated())
+            .then_ignore(just(Token::Operator(Operator::Eq)))
+            .then(expression.clone())
+            .then(
+                just(Token::Keyword(Keyword::EndLet))
+                    .map(|_| None)
+                    .or(just(Token::Keyword(Keyword::In))
+                        .ignore_then(expression.clone())
+                        .map(Some)),
+            )
+            .map(|(((name, param_names), expr_to_bind), expr)| {
+                Expression::LetRec(
+                    name,
+                    Box::new(curry_function(param_names, expr_to_bind)),
+                    expr.map(Box::new),
+                )
+            });
+
         let r#let = just(Token::Keyword(Keyword::Let))
             .ignore_then(identifier)
             .then(identifier.repeated().or_not())
@@ -175,7 +203,7 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
             .then(expression)
             .foldr(|param, expr| Expression::Function(param, Box::new(expr)));
 
-        r#if.or(r#let).or(function).or(compare)
+        r#if.or(letrec).or(r#let).or(function).or(compare)
     });
 
     expression.repeated().then_ignore(end())

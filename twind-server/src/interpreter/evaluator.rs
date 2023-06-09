@@ -13,7 +13,7 @@ pub enum Value {
     Void,
     Boolean(bool),
     Integer(i64),
-    Function(String, Expression, Environment),
+    Function(Option<String>, String, Expression, Environment),
 }
 
 impl fmt::Display for Value {
@@ -22,7 +22,7 @@ impl fmt::Display for Value {
             Value::Void => write!(f, "void"),
             Value::Boolean(value) => write!(f, "{value}"),
             Value::Integer(value) => write!(f, "{value}"),
-            Value::Function(param, expr, _) => write!(f, "func {param} -> {expr}"),
+            Value::Function(_, param, expr, _) => write!(f, "func {param} -> {expr}"),
         }
     }
 }
@@ -48,9 +48,26 @@ impl Value {
         }
     }
 
-    pub fn to_function(self) -> Result<(String, Expression, Environment), InterpreterError> {
+    pub fn to_function(
+        self,
+    ) -> Result<(Option<String>, String, Expression, Environment), InterpreterError> {
         match self {
-            Value::Function(param_name, expr, env) => Ok((param_name, expr, env)),
+            Value::Function(func_name, param_name, expr, env) => {
+                Ok((func_name, param_name, expr, env))
+            }
+            _ => Err(InterpreterError::UnexpectedValue {
+                expect: "function".to_string(),
+                found: format!("{self:?}"),
+            }),
+        }
+    }
+
+    pub fn set_func_name(&mut self, new_func_name: String) -> Result<(), InterpreterError> {
+        match self {
+            Value::Function(func_name, _, _, _) => {
+                func_name.replace(new_func_name);
+                Ok(())
+            }
             _ => Err(InterpreterError::UnexpectedValue {
                 expect: "function".to_string(),
                 found: format!("{self:?}"),
@@ -96,15 +113,30 @@ pub fn evaluate(expr: Expression, env: &mut Environment) -> Result<Value, Interp
             env.expand(name, expr_to_bind);
             Ok(Value::Void)
         }
+        Expression::LetRec(name, expr_to_bind, expr) => {
+            let mut expr_to_bind = evaluate(*expr_to_bind, env)?;
+            expr_to_bind.set_func_name(name.clone())?;
+            if let Some(expr) = expr {
+                return evaluate(*expr, &mut env.expanded(name, expr_to_bind));
+            }
+
+            env.expand(name, expr_to_bind);
+            Ok(Value::Void)
+        }
         Expression::Function(param_name, expr) => {
-            Ok(Value::Function(param_name, *expr, env.clone()))
+            Ok(Value::Function(None, param_name, *expr, env.clone()))
         }
         Expression::Apply(func, arg) => {
-            let (param_name, expr, newenv) = evaluate(*func, env)?.to_function()?;
-            let arg = evaluate(*arg, env)?;
-            evaluate(expr, &mut newenv.expanded(param_name, arg))
+            let func = evaluate(*func, env)?;
+            let (func_name, param_name, expr, mut newenv) = func.clone().to_function()?;
+            if let Some(func_name) = func_name {
+                newenv.expand(func_name, func);
+            }
+            newenv.expand(param_name, evaluate(*arg, env)?);
+            evaluate(expr, &mut newenv)
         }
         Expression::OperatorFunction(op) => Ok(Value::Function(
+            None,
             ".lhs".to_string(),
             Expression::Function(
                 ".rhs".to_string(),

@@ -40,6 +40,7 @@ pub enum Keyword {
     EndLet,
     Fun,
     Arrow,
+    Rec,
 }
 
 impl fmt::Display for Token {
@@ -82,6 +83,7 @@ fn lexer() -> impl Parser<char, TokenVec, Error = Simple<char>> {
         .or(keyword("let").to(Token::Keyword(Keyword::Let)))
         .or(keyword("in").to(Token::Keyword(Keyword::In)))
         .or(keyword("fun").to(Token::Keyword(Keyword::Fun)))
+        .or(keyword("rec").to(Token::Keyword(Keyword::Rec)))
         .or(just(';')
             .then(just(';'))
             .to(Token::Keyword(Keyword::EndLet)))

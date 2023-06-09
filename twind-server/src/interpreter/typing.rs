@@ -27,6 +27,7 @@ pub fn infer_type(expr: &Expression) -> Result<Type, InterpreterError> {
         Expression::Binary(_, _, _) => todo!(),
         Expression::If(_, _, _) => todo!(),
         Expression::Let(_, _, _) => todo!(),
+        Expression::LetRec(_, _, _) => todo!(),
         Expression::Function(_, _) => todo!(),
         Expression::Apply(_, _) => todo!(),
         Expression::OperatorFunction(_) => todo!(),
