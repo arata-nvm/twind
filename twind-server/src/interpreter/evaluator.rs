@@ -1,3 +1,5 @@
+use std::fmt;
+
 use super::{
     environment,
     error::InterpreterError,
@@ -12,6 +14,17 @@ pub enum Value {
     Boolean(bool),
     Integer(i64),
     Function(String, Expression, Environment),
+}
+
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Value::Void => write!(f, "void"),
+            Value::Boolean(value) => write!(f, "{value}"),
+            Value::Integer(value) => write!(f, "{value}"),
+            Value::Function(param, expr, _) => write!(f, "func {param} -> {expr}"),
+        }
+    }
 }
 
 impl Value {

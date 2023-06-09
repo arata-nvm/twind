@@ -37,7 +37,10 @@ fn repl_loop() {
 
 fn interpret(s: &str, e: &mut Environment) {
     match interpreter::interpret(s, e) {
-        Ok(value) => println!("{value:?}"),
+        Ok((value, typ)) => {
+            println!("{value}");
+            println!(": {typ}");
+        }
         Err(errors) => {
             println!("There are {} errors:", errors.len());
             for err in errors {

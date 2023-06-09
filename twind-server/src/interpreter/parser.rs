@@ -1,3 +1,5 @@
+use std::fmt;
+
 use chumsky::{prelude::*, Stream};
 
 use super::{
@@ -27,6 +29,41 @@ pub enum BinaryOperator {
     Mul,
     Div,
     Lt,
+}
+
+impl fmt::Display for Expression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Expression::Identifier(name) => write!(f, "{name}"),
+            Expression::Boolean(value) => write!(f, "{value}"),
+            Expression::Integer(value) => write!(f, "{value}"),
+            Expression::Binary(op, lhs, rhs) => write!(f, "{lhs} {op} {rhs}"),
+            Expression::If(cond, val_then, val_else) => {
+                write!(f, "if {cond} then {val_then} else {val_else}")
+            }
+            Expression::Let(name, expr_to_bind, Some(expr)) => {
+                write!(f, "let {name} = {expr_to_bind} in {expr}")
+            }
+            Expression::Let(name, expr_to_bind, None) => {
+                write!(f, "let {name} = {expr_to_bind}")
+            }
+            Expression::Function(param, expr) => write!(f, "func {param} -> {expr}"),
+            Expression::Apply(func, arg) => write!(f, "{func} {arg}"),
+            Expression::OperatorFunction(op) => write!(f, "({op})"),
+        }
+    }
+}
+
+impl fmt::Display for BinaryOperator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BinaryOperator::Add => write!(f, "+"),
+            BinaryOperator::Sub => write!(f, "-"),
+            BinaryOperator::Mul => write!(f, "*"),
+            BinaryOperator::Div => write!(f, "/"),
+            BinaryOperator::Lt => write!(f, "<"),
+        }
+    }
 }
 
 fn curry_function(param_names: Vec<String>, expr: Expression) -> Expression {
