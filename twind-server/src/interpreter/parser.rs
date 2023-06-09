@@ -119,7 +119,7 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
                     .map(|_| None)
                     .or(just(Token::Keyword(Keyword::In))
                         .ignore_then(expression.clone())
-                        .map(|expr| Some(expr))),
+                        .map(Some)),
             )
             .map(
                 |(((name, param_names), expr_to_bind), expr)| match param_names {
