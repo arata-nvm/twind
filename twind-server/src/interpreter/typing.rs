@@ -1,8 +1,10 @@
 use std::fmt;
 
+use crate::interpreter::parser::BinaryOperator;
+
 use super::{error::InterpreterError, parser::Expression};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Type {
     Void,
     Boolean,
@@ -24,8 +26,39 @@ pub fn infer_type(expr: &Expression) -> Result<Type, InterpreterError> {
         Expression::Identifier(_) => todo!(),
         Expression::Boolean(_) => Ok(Type::Boolean),
         Expression::Integer(_) => Ok(Type::Integer),
-        Expression::Binary(_, _, _) => todo!(),
-        Expression::If(_, _, _) => todo!(),
+        Expression::Binary(op, lhs, rhs) => {
+            let lhs = infer_type(lhs)?;
+            let rhs = infer_type(rhs)?;
+            match (op, lhs, rhs) {
+                (BinaryOperator::Lt, Type::Integer, Type::Integer) => Ok(Type::Boolean),
+                (_, Type::Integer, Type::Integer) => Ok(Type::Integer),
+                _ => Err(InterpreterError::UnexpectedType {
+                    expect: Type::Integer,
+                    found: None,
+                }),
+            }
+        }
+        Expression::If(cond, val_then, val_else) => {
+            let cond = infer_type(cond)?;
+            let val_then = infer_type(val_then)?;
+            let val_else = infer_type(val_else)?;
+
+            if !matches!(cond, Type::Boolean) {
+                return Err(InterpreterError::UnexpectedType {
+                    expect: cond,
+                    found: Some(Type::Boolean),
+                });
+            }
+
+            if val_then != val_else {
+                return Err(InterpreterError::UnexpectedType {
+                    expect: val_then,
+                    found: Some(val_else),
+                });
+            }
+
+            Ok(val_then)
+        }
         Expression::Let(_, _, _) => todo!(),
         Expression::LetRec(_, _, _) => todo!(),
         Expression::Function(_, _) => todo!(),
