@@ -74,25 +74,22 @@ pub fn evaluate(expr: Expression, env: &mut Environment) -> Result<Value, Interp
                 evaluate(*val_else, env)
             }
         }
-        Expression::Let(name, expr_to_bind, expr) => match expr {
-            None => {
-                let expr_to_bind = evaluate(*expr_to_bind, env)?;
-                env.expand(name, expr_to_bind);
-                Ok(Value::Void)
+        Expression::Let(name, expr_to_bind, expr) => {
+            let expr_to_bind = evaluate(*expr_to_bind, env)?;
+            if let Some(expr) = expr {
+                return evaluate(*expr, &mut env.expanded(name, expr_to_bind));
             }
-            Some(expr) => {
-                let mut newenv = env.clone();
-                newenv.expand(name, evaluate(*expr_to_bind, env)?);
-                evaluate(*expr, &mut newenv)
-            }
-        },
+
+            env.expand(name, expr_to_bind);
+            Ok(Value::Void)
+        }
         Expression::Function(param_name, expr) => {
             Ok(Value::Function(param_name, *expr, env.clone()))
         }
         Expression::Apply(func, arg) => {
-            let (param_name, expr, mut newenv) = evaluate(*func, env)?.to_function()?;
-            newenv.expand(param_name, evaluate(*arg, env)?);
-            evaluate(expr, &mut newenv)
+            let (param_name, expr, newenv) = evaluate(*func, env)?.to_function()?;
+            let arg = evaluate(*arg, env)?;
+            evaluate(expr, &mut newenv.expanded(param_name, arg))
         }
         Expression::OperatorFunction(op) => Ok(Value::Function(
             ".lhs".to_string(),
