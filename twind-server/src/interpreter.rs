@@ -25,7 +25,7 @@ pub fn interpret(
     let mut last_value = Value::Void;
     let mut last_type = Type::Void;
     for expr in program {
-        last_type = typing::infer_type(&expr, tenv).map_err(|err| vec![err])?;
+        last_type = typing::infer(expr.clone(), tenv).map_err(|err| vec![err])?;
         last_value = evaluator::evaluate(expr, venv).map_err(|err| vec![err])?;
     }
 

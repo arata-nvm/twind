@@ -1,16 +1,19 @@
-use std::fmt;
+use std::{cell::RefCell, fmt};
 
 use crate::interpreter::parser::BinaryOperator;
 
 use super::{environment, error::InterpreterError, parser::Expression};
 
-pub type Environment = environment::Environment<Type>;
+pub type Environment = environment::Environment<String, Type>;
+pub type TypeVariable = String;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
     Void,
     Boolean,
     Integer,
+    Function(Box<Type>, Box<Type>),
+    Variable(TypeVariable),
 }
 
 impl fmt::Display for Type {
@@ -19,61 +22,140 @@ impl fmt::Display for Type {
             Type::Void => write!(f, "void"),
             Type::Boolean => write!(f, "bool"),
             Type::Integer => write!(f, "int"),
+            Type::Function(param, ret) => write!(f, "{param} -> {ret}"),
+            Type::Variable(index) => write!(f, "'{index}"),
         }
     }
 }
 
-pub fn infer_type(expr: &Expression, env: &mut Environment) -> Result<Type, InterpreterError> {
+pub fn infer(expr: Expression, tenv: &mut Environment) -> Result<Type, InterpreterError> {
     match expr {
-        Expression::Identifier(name) => env
-            .lookup(name)
-            .ok_or(InterpreterError::CannotFindVariable { name: name.clone() }),
+        Expression::Identifier(name) => tenv
+            .lookup(&name)
+            .map(|typ| subst(typ, tenv))
+            .ok_or(InterpreterError::CannotFindVariable { name }),
         Expression::Boolean(_) => Ok(Type::Boolean),
         Expression::Integer(_) => Ok(Type::Integer),
         Expression::Binary(op, lhs, rhs) => {
-            let lhs = infer_type(lhs, env)?;
-            let rhs = infer_type(rhs, env)?;
-            match (op, lhs, rhs) {
-                (BinaryOperator::Lt, Type::Integer, Type::Integer) => Ok(Type::Boolean),
-                (_, Type::Integer, Type::Integer) => Ok(Type::Integer),
-                _ => Err(InterpreterError::UnexpectedType {
-                    expect: Type::Integer,
-                    found: None,
-                }),
+            let lhs = infer(*lhs, tenv)?;
+            let rhs = infer(*rhs, tenv)?;
+            unify(lhs, Type::Integer, tenv)?;
+            unify(rhs, Type::Integer, tenv)?;
+            match op {
+                BinaryOperator::Add
+                | BinaryOperator::Sub
+                | BinaryOperator::Mul
+                | BinaryOperator::Div => Ok(Type::Integer),
+                BinaryOperator::Lt => Ok(Type::Boolean),
             }
         }
         Expression::If(cond, val_then, val_else) => {
-            let cond = infer_type(cond, env)?;
-            let val_then = infer_type(val_then, env)?;
-            let val_else = infer_type(val_else, env)?;
-
-            if !matches!(cond, Type::Boolean) {
-                return Err(InterpreterError::UnexpectedType {
-                    expect: cond,
-                    found: Some(Type::Boolean),
-                });
-            }
-
-            if val_then != val_else {
-                return Err(InterpreterError::UnexpectedType {
-                    expect: val_then,
-                    found: Some(val_else),
-                });
-            }
-
-            Ok(val_then)
+            let cond = infer(*cond, tenv)?;
+            let val_then = infer(*val_then, tenv)?;
+            let val_else = infer(*val_else, tenv)?;
+            unify(cond, Type::Boolean, tenv)?;
+            unify(val_then.clone(), val_else, tenv)?;
+            Ok(subst(val_then, tenv))
         }
         Expression::Let(name, expr_to_bind, expr) => {
-            let expr_to_bind = infer_type(&**expr_to_bind, env)?;
+            let expr_to_bind = infer(*expr_to_bind, tenv)?;
             if let Some(expr) = expr {
-                infer_type(expr, &mut env.expanded(name.clone(), expr_to_bind))
-            } else {
-                Ok(Type::Void)
+                return infer(*expr, &mut tenv.expanded(name, expr_to_bind));
             }
+
+            tenv.expand(name, expr_to_bind);
+            Ok(Type::Void)
         }
-        Expression::LetRec(_, _, _) => todo!(),
-        Expression::Function(_, _) => todo!(),
-        Expression::Apply(_, _) => todo!(),
+        Expression::LetRec(name, expr_to_bind, expr) => {
+            let param = new_type_var();
+            let ret = new_type_var();
+            let func = Type::Function(Box::new(param.clone()), Box::new(ret.clone()));
+
+            let mut newtenv = tenv.expanded(name.clone(), func);
+            let func2 = infer(*expr_to_bind, &mut newtenv)?;
+            let Type::Function(param2, ret2) = func2.clone() else {
+                return Err(InterpreterError::UnexpectedType { expect: "function".to_string(), found: Some(func2) });
+            };
+
+            unify(param, *param2, tenv)?;
+            unify(ret, *ret2, tenv)?;
+
+            if let Some(expr) = expr {
+                return infer(*expr, &mut tenv.expanded(name, func2));
+            }
+
+            Ok(Type::Void)
+        }
+        Expression::Function(param_name, expr) => {
+            let param = new_type_var();
+            let newtenv = &mut tenv.expanded(param_name, param.clone());
+            let expr = infer(*expr, newtenv)?;
+
+            Ok(Type::Function(
+                Box::new(subst(param, newtenv)),
+                Box::new(subst(expr, newtenv)),
+            ))
+        }
+        Expression::Apply(func, arg) => {
+            let func = infer(*func, tenv)?;
+            let arg = infer(*arg, tenv)?;
+            let Type::Function(param, ret)  = func else {
+                println!("{func}");
+                println!("{tenv:?}");
+                return Err(InterpreterError::UnexpectedType { expect: "function".to_string(), found: None });
+            };
+
+            unify(*param, arg, tenv)?;
+            Ok(subst(*ret, tenv))
+        }
         Expression::OperatorFunction(_) => todo!(),
     }
+}
+
+fn unify(typ1: Type, typ2: Type, tenv: &mut Environment) -> Result<(), InterpreterError> {
+    match (typ1, typ2) {
+        (Type::Void, Type::Void)
+        | (Type::Boolean, Type::Boolean)
+        | (Type::Integer, Type::Integer)
+        | (Type::Variable(_), Type::Variable(_)) => Ok(()),
+        (Type::Function(param1, ret1), Type::Function(param2, ret2)) => {
+            unify(*param1, *param2, tenv)?;
+            unify(*ret1, *ret2, tenv)?;
+            Ok(())
+        }
+
+        (typ, Type::Variable(var)) | (Type::Variable(var), typ) => {
+            tenv.expand(var, typ);
+            Ok(())
+        }
+
+        (typ1, typ2) => Err(InterpreterError::CannotUnifyType { typ1, typ2 }),
+    }
+}
+
+fn subst(typ: Type, tenv: &Environment) -> Type {
+    match typ {
+        Type::Void | Type::Boolean | Type::Integer => typ,
+        Type::Function(param, ret) => {
+            let param = subst(*param, tenv);
+            let ret = subst(*ret, tenv);
+            Type::Function(Box::new(param), Box::new(ret))
+        }
+        Type::Variable(ref var) => match tenv.lookup(var) {
+            Some(typ) => typ,
+            None => typ,
+        },
+    }
+}
+
+fn new_type_var() -> Type {
+    thread_local! {
+        static INDEX: RefCell<usize> = RefCell::new(0);
+    }
+
+    INDEX.with(|index| {
+        let typ = Type::Variable(format!("{}", *index.borrow()));
+        *index.borrow_mut() += 1;
+        typ
+    })
 }

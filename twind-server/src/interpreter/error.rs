@@ -21,7 +21,10 @@ pub enum InterpreterError {
     CannotFindVariable { name: String },
 
     #[error("{expect} expected, but {found:?} found ")]
-    UnexpectedType { expect: Type, found: Option<Type> },
+    UnexpectedType { expect: String, found: Option<Type> },
+
+    #[error("cannot unity {typ1} and {typ2}")]
+    CannotUnifyType { typ1: Type, typ2: Type },
 }
 
 impl From<Simple<char>> for InterpreterError {

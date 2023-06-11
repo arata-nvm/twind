@@ -6,7 +6,7 @@ use super::{
     parser::{BinaryOperator, Expression},
 };
 
-pub type Environment = environment::Environment<Value>;
+pub type Environment = environment::Environment<String, Value>;
 
 #[derive(Debug, Clone)]
 pub enum Value {
