@@ -54,7 +54,7 @@ impl fmt::Display for Expression {
             Expression::LetRec(name, expr_to_bind, None) => {
                 write!(f, "let rec {name} = {expr_to_bind}")
             }
-            Expression::Function(param, expr) => write!(f, "func {param} -> {expr}"),
+            Expression::Function(param, expr) => write!(f, "fun {param} -> {expr}"),
             Expression::Apply(func, arg) => write!(f, "{func} {arg}"),
             Expression::OperatorFunction(op) => write!(f, "({op})"),
         }
