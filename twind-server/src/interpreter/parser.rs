@@ -74,9 +74,12 @@ impl fmt::Display for BinaryOperator {
 }
 
 fn curry_function(param_names: Vec<String>, expr: Expression) -> Expression {
-    param_names.into_iter().fold(expr, |expr, param_name| {
-        Expression::Function(param_name, Box::new(expr))
-    })
+    param_names
+        .into_iter()
+        .rev()
+        .fold(expr, |expr, param_name| {
+            Expression::Function(param_name, Box::new(expr))
+        })
 }
 
 fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
@@ -201,7 +204,11 @@ fn parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
             .ignore_then(identifier.repeated())
             .then_ignore(just(Token::Keyword(Keyword::Arrow)))
             .then(expression)
-            .foldr(|param, expr| Expression::Function(param, Box::new(expr)));
+            .map(|(params, expr)| {
+                params.into_iter().rev().fold(expr, |expr, param| {
+                    Expression::Function(param, Box::new(expr))
+                })
+            });
 
         r#if.or(letrec).or(r#let).or(function).or(compare)
     });

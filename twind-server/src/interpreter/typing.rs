@@ -90,7 +90,8 @@ pub fn infer(expr: Expression, tenv: &mut Environment) -> Result<Type, Interpret
         }
         Expression::Function(param_name, expr) => {
             let param = new_type_var();
-            let newtenv = &mut tenv.expanded(param_name, param.clone());
+            tenv.expand(param_name, param.clone());
+            let newtenv = tenv;
             let expr = infer(*expr, newtenv)?;
 
             Ok(Type::Function(
