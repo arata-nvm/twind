@@ -1,4 +1,8 @@
-use self::{error::InterpreterError, evaluator::Value, typing::Type};
+use self::{
+    error::InterpreterError,
+    evaluator::Value,
+    typing::{reorder_type_schme, Type},
+};
 
 pub mod environment;
 pub mod error;
@@ -29,5 +33,5 @@ pub fn interpret(
         last_value = evaluator::evaluate(expr, venv).map_err(|err| vec![err])?;
     }
 
-    Ok((last_value, last_type))
+    Ok((last_value, reorder_type_schme(last_type)))
 }

@@ -1,4 +1,4 @@
-use std::{cell::RefCell, fmt};
+use std::{cell::RefCell, collections::HashSet, fmt};
 
 use crate::interpreter::parser::BinaryOperator;
 
@@ -23,7 +23,13 @@ impl fmt::Display for Type {
             Type::Void => write!(f, "void"),
             Type::Boolean => write!(f, "bool"),
             Type::Integer => write!(f, "int"),
-            Type::Function(param, ret) => write!(f, "({param} -> {ret})"),
+            Type::Function(param, ret) => {
+                match **param {
+                    Type::Function(_, _) => write!(f, "({param})")?,
+                    _ => write!(f, "{param}")?,
+                }
+                write!(f, " -> {ret}")
+            }
             Type::Variable(index) => write!(f, "{index}"),
             Type::Schema(index) => write!(f, "{index}"),
         }
@@ -213,4 +219,42 @@ fn new_type_schema() -> Type {
         *index.borrow_mut() += 1;
         typ
     })
+}
+
+pub fn reorder_type_schme(typ: Type) -> Type {
+    let schemas = collect_typ_var(&typ);
+    let mut tenv = Environment::new();
+
+    let mut schemas: Vec<String> = schemas.into_iter().collect();
+    schemas.sort();
+
+    schemas
+        .into_iter()
+        .enumerate()
+        .map(|(index, var)| (nth_alphabet(index), var))
+        .for_each(|(index, var)| tenv.expand(var, Type::Variable(format!("'{index}"))));
+
+    subst(typ, &tenv)
+}
+
+fn collect_typ_var(typ: &Type) -> HashSet<String> {
+    match typ {
+        Type::Void | Type::Boolean | Type::Integer | Type::Schema(_) => HashSet::new(),
+        Type::Function(param, ret) => {
+            let mut v1 = collect_typ_var(param);
+            let v2 = collect_typ_var(ret);
+            v1.extend(v2);
+            v1
+        }
+        Type::Variable(var) => HashSet::from_iter([var.clone()]),
+    }
+}
+
+fn nth_alphabet(n: usize) -> String {
+    if n < 26 {
+        let c = ('a' as u8 + n as u8) as char;
+        c.to_string()
+    } else {
+        n.to_string()
+    }
 }

@@ -40,8 +40,7 @@ fn repl_loop() {
 fn interpret(s: &str, venv: &mut evaluator::Environment, tenv: &mut typing::Environment) {
     match interpreter::interpret(s, venv, tenv) {
         Ok((value, typ)) => {
-            println!("{value}");
-            println!(": {typ}");
+            println!("- : {typ} = {value}");
         }
         Err(errors) => {
             println!("There are {} errors:", errors.len());
