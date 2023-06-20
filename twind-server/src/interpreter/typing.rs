@@ -14,6 +14,7 @@ pub enum Type {
     Integer,
     Function(Box<Type>, Box<Type>),
     Variable(TypeVariable),
+    Schema(TypeVariable),
 }
 
 impl fmt::Display for Type {
@@ -22,18 +23,19 @@ impl fmt::Display for Type {
             Type::Void => write!(f, "void"),
             Type::Boolean => write!(f, "bool"),
             Type::Integer => write!(f, "int"),
-            Type::Function(param, ret) => write!(f, "{param} -> {ret}"),
-            Type::Variable(index) => write!(f, "'{index}"),
+            Type::Function(param, ret) => write!(f, "({param} -> {ret})"),
+            Type::Variable(index) => write!(f, "{index}"),
+            Type::Schema(index) => write!(f, "{index}"),
         }
     }
 }
 
 pub fn infer(expr: Expression, tenv: &mut Environment) -> Result<Type, InterpreterError> {
     match expr {
-        Expression::Identifier(name) => tenv
-            .lookup(&name)
-            .map(|typ| subst(typ, tenv))
-            .ok_or(InterpreterError::CannotFindVariable { name }),
+        Expression::Identifier(name) => match tenv.lookup(&name) {
+            Some(typ) => Ok(instanciate(subst(typ, tenv), tenv)),
+            None => Err(InterpreterError::CannotFindVariable { name }),
+        },
         Expression::Boolean(_) => Ok(Type::Boolean),
         Expression::Integer(_) => Ok(Type::Integer),
         Expression::Binary(op, lhs, rhs) => {
@@ -58,7 +60,7 @@ pub fn infer(expr: Expression, tenv: &mut Environment) -> Result<Type, Interpret
             Ok(subst(val_then, tenv))
         }
         Expression::Let(name, expr_to_bind, expr) => {
-            let expr_to_bind = infer(*expr_to_bind, tenv)?;
+            let expr_to_bind = generalize(infer(*expr_to_bind, tenv)?);
             if let Some(expr) = expr {
                 return infer(*expr, &mut tenv.expanded(name, expr_to_bind));
             }
@@ -99,16 +101,57 @@ pub fn infer(expr: Expression, tenv: &mut Environment) -> Result<Type, Interpret
         Expression::Apply(func, arg) => {
             let func = infer(*func, tenv)?;
             let arg = infer(*arg, tenv)?;
-            let Type::Function(param, ret)  = func else {
-                println!("{func}");
-                println!("{tenv:?}");
-                return Err(InterpreterError::UnexpectedType { expect: "function".to_string(), found: None });
-            };
-
-            unify(*param, arg, tenv)?;
-            Ok(subst(*ret, tenv))
+            let ret = new_type_var();
+            unify(
+                func,
+                Type::Function(Box::new(arg), Box::new(ret.clone())),
+                tenv,
+            )?;
+            Ok(subst(ret, tenv))
         }
         Expression::OperatorFunction(_) => todo!(),
+    }
+}
+
+fn instanciate(typ: Type, tenv: &mut Environment) -> Type {
+    match typ {
+        Type::Void | Type::Boolean | Type::Integer | Type::Variable(_) => typ,
+        Type::Function(param, ret) => {
+            let param = instanciate(*param, tenv);
+            let ret = instanciate(*ret, tenv);
+            Type::Function(Box::new(param), Box::new(ret))
+        }
+        Type::Schema(schema_var) => match tenv.lookup(&schema_var) {
+            Some(typ_var) => typ_var,
+            None => {
+                let typ_var = new_type_var();
+                tenv.expand(schema_var, typ_var.clone());
+                typ_var
+            }
+        },
+    }
+}
+
+fn generalize(typ: Type) -> Type {
+    do_generalize(typ, &mut Environment::new())
+}
+
+fn do_generalize(typ: Type, tenv: &mut Environment) -> Type {
+    match typ {
+        Type::Void | Type::Boolean | Type::Integer | Type::Schema(_) => typ,
+        Type::Function(param, ret) => {
+            let param = do_generalize(*param, tenv);
+            let ret = do_generalize(*ret, tenv);
+            Type::Function(Box::new(param), Box::new(ret))
+        }
+        Type::Variable(var) => match tenv.lookup(&var) {
+            Some(schema) => schema,
+            None => {
+                let schema = new_type_schema();
+                tenv.expand(var, schema.clone());
+                schema
+            }
+        },
     }
 }
 
@@ -116,8 +159,7 @@ fn unify(typ1: Type, typ2: Type, tenv: &mut Environment) -> Result<(), Interpret
     match (typ1, typ2) {
         (Type::Void, Type::Void)
         | (Type::Boolean, Type::Boolean)
-        | (Type::Integer, Type::Integer)
-        | (Type::Variable(_), Type::Variable(_)) => Ok(()),
+        | (Type::Integer, Type::Integer) => Ok(()),
         (Type::Function(param1, ret1), Type::Function(param2, ret2)) => {
             unify(*param1, *param2, tenv)?;
             unify(*ret1, *ret2, tenv)?;
@@ -135,14 +177,14 @@ fn unify(typ1: Type, typ2: Type, tenv: &mut Environment) -> Result<(), Interpret
 
 fn subst(typ: Type, tenv: &Environment) -> Type {
     match typ {
-        Type::Void | Type::Boolean | Type::Integer => typ,
+        Type::Void | Type::Boolean | Type::Integer | Type::Schema(_) => typ,
         Type::Function(param, ret) => {
             let param = subst(*param, tenv);
             let ret = subst(*ret, tenv);
             Type::Function(Box::new(param), Box::new(ret))
         }
         Type::Variable(ref var) => match tenv.lookup(var) {
-            Some(typ) => typ,
+            Some(typ) => subst(typ, tenv),
             None => typ,
         },
     }
@@ -154,7 +196,19 @@ fn new_type_var() -> Type {
     }
 
     INDEX.with(|index| {
-        let typ = Type::Variable(format!("{}", *index.borrow()));
+        let typ = Type::Variable(format!("'{}", *index.borrow()));
+        *index.borrow_mut() += 1;
+        typ
+    })
+}
+
+fn new_type_schema() -> Type {
+    thread_local! {
+        static INDEX: RefCell<usize> = RefCell::new(0);
+    }
+
+    INDEX.with(|index| {
+        let typ = Type::Schema(format!("''{}", *index.borrow()));
         *index.borrow_mut() += 1;
         typ
     })
