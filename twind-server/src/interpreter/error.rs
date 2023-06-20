@@ -23,7 +23,7 @@ pub enum InterpreterError {
     #[error("{expect} expected, but {found:?} found ")]
     UnexpectedType { expect: String, found: Option<Type> },
 
-    #[error("cannot unity {typ1} and {typ2}")]
+    #[error("cannot unify {typ1} and {typ2}")]
     CannotUnifyType { typ1: Type, typ2: Type },
 }
 

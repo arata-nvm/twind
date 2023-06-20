@@ -22,7 +22,7 @@ impl fmt::Display for Value {
             Value::Void => write!(f, "void"),
             Value::Boolean(value) => write!(f, "{value}"),
             Value::Integer(value) => write!(f, "{value}"),
-            Value::Function(_, param, expr, _) => write!(f, "func {param} -> {expr}"),
+            Value::Function(_, param, expr, _) => write!(f, "fun {param} -> {expr}"),
         }
     }
 }
